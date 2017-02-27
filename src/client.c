@@ -41,16 +41,17 @@ int main(int argc, char* argv[])
     assert(req_buf);
 
     msg_t* pmsg = (msg_t*)req_buf; 
-    pmsg->pid = getpid();
-    pmsg->sender = 1;
-    pmsg->recver = 2;
+    pmsg->s_pid = getpid();
+	pmsg->r_pid = -1;
+    pmsg->s_mdl = YAU;
+    pmsg->r_mdl = DVU;
     pmsg->data_len = data_len;
     
     req_t* preq = (req_t*)pmsg->data;
     preq->msg_type = 200;
     memcpy(preq->what, content, strlen(content) + 1);
 
-    print_req_msg(pmsg, preq);
+    print_req_msg(pmsg, preq); puts("");
 
 
     sv_fd = open(SV_FIFO, O_WRONLY);
@@ -77,9 +78,11 @@ int main(int argc, char* argv[])
 	}
 	pmsg = (msg_t*) resp_buf;
 	resp_t* presp = (resp_t*) pmsg->data;
-	print_resp_msg(pmsg, presp);
+	print_resp_msg(pmsg, presp); puts("");
 
 	puts("client exit");
+	free(resp_buf);
+
 	return 0;
     
 }

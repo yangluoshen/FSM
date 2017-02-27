@@ -16,17 +16,21 @@ typedef size_t msg_type_t;
 typedef ssize_t error_t;
 typedef size_t module_t;
 
+/* msg head */
 typedef struct{
-    pid_t pid;
-    module_t sender;
-    module_t recver;
+    pid_t s_pid;     /*sender pid*/
+	pid_t r_pid;     /*receiver pid*/
+    module_t s_mdl;  /*sender module type*/
+    module_t r_mdl;  /*sender module type*/
     size_t data_len;
 
-    char data[PTR_SIZE];
+    char data[PTR_SIZE];  /* point to real data */
 } msg_t;
 
 #define MSG_HEAD_LEN (sizeof(msg_t) - PTR_SIZE)
 
+
+/** user-defined struct **/
 typedef struct{
     msg_type_t msg_type;
     char what[MAX_CONTENT_LEN];
@@ -49,8 +53,8 @@ typedef struct{
 
 /**** printer ****/
 #define PRINT_MSG(__msg) \
-        printf("pid[%d],sender[%lu],recver[%lu],data_len[%lu]\n",\
-            (__msg)->pid,(__msg)->sender, (__msg)->recver, (__msg)->data_len)
+        printf("sender pid[%d],receiver pid[%d],sender module[%lu],receiver module[%lu],data_len[%lu]\n",\
+            (__msg)->s_pid,(__msg)->r_pid,(__msg)->s_mdl,(__msg)->r_mdl, (__msg)->data_len)
 
 #define print_req_msg(__msg, __req) \
     do {\
@@ -68,12 +72,13 @@ typedef struct{
 
 /**** enums ****/
 
+/*each Uint(module) may indicate a client(or a micro serve)*/
 enum E_MODULE_TYPE{
 	DVU = 0,
-	YOU,
+	YAU,
 	BYU,
 
-	UKU    /*unknown*/
+	UKU    /*unknown unit*/
 };
 
 #endif
