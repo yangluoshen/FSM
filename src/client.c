@@ -42,7 +42,7 @@ int main(int argc, char* argv[])
 
     msg_t* pmsg = (msg_t*)req_buf; 
     pmsg->s_pid = getpid();
-	pmsg->r_pid = -1;
+    pmsg->r_pid = -1;
     pmsg->s_mdl = YAU;
     pmsg->r_mdl = DVU;
     pmsg->data_len = data_len;
@@ -70,19 +70,19 @@ int main(int argc, char* argv[])
 
 
     char* resp_buf = (char*) malloc(RESP_LEN);
-	assert(resp_buf);
+    assert(resp_buf);
 
     if (read(cl_fd, resp_buf, RESP_LEN) != RESP_LEN){
-		perror("client read response failed");
-		return -1;
-	}
-	pmsg = (msg_t*) resp_buf;
-	resp_t* presp = (resp_t*) pmsg->data;
-	print_resp_msg(pmsg, presp); puts("");
+        perror("client read response failed");
+        return -1;
+    }
+    pmsg = (msg_t*) resp_buf;
+    resp_t* presp = (resp_t*) pmsg->data;
+    print_resp_msg(pmsg, presp); puts("");
 
-	puts("client exit");
-	free(resp_buf);
+    puts("client exit");
+    free(resp_buf);
 
-	return 0;
+    return 0;
     
 }

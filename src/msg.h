@@ -19,7 +19,7 @@ typedef size_t module_t;
 /* msg head */
 typedef struct{
     pid_t s_pid;     /*sender pid*/
-	pid_t r_pid;     /*receiver pid*/
+    pid_t r_pid;     /*receiver pid*/
     module_t s_mdl;  /*sender module type*/
     module_t r_mdl;  /*sender module type*/
     size_t data_len;
