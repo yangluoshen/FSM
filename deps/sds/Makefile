@@ -1,8 +1,10 @@
-all: sds-test
+
+sds: sds.c sds.h
+	$(CC) -fPIC -shared sds.c -Wall -std=c99 -pedantic -O2 -o libsds.so
 
 sds-test: sds.c sds.h
 	$(CC) -o sds-test sds.c -Wall -std=c99 -pedantic -O2 -DSDS_TEST_MAIN
 	@echo ">>> Type ./sds-test to run the sds.c unit tests."
 
 clean:
-	rm -f sds-test
+	rm -f sds-test libsds.so

@@ -82,7 +82,7 @@ int send_client_msg(char* pmsg)
     return 0;
 }
 
-int check_new_process(){}
+int check_new_process(){return 1;}
 
 int main (int argc, char* argv[])
 {
@@ -114,7 +114,7 @@ int main (int argc, char* argv[])
     
     struct epoll_event ev_list[MAX_EVENTS];
     while(1){
-        check_new_process();
+        (void)check_new_process();
 
         int ready = epoll_wait(sv_epfd, ev_list, MAX_EVENTS, TIMEOUT_SV_EPOLL);
         assert(-1 != ready);
