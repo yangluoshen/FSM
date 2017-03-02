@@ -6,12 +6,30 @@
 #include <signal.h>
 #include <malloc.h>
 #include <string.h>
-
 #include <sys/epoll.h>
+
 #include "msg.h"
+#include "adlist.h"
+#include "sds.h"
 
 static int sv_epfd;
 static int sv_fd;
+static int sv_reg_fd;
+//static unsigned int max_conn_num = MAX_PROCESS_CONN_NUM;
+
+list* reg_list;
+
+typedef struct {
+    PRCS_BASE
+
+    int fd;
+    int dummyfd;
+}prcs_info;
+
+enum FIFO_KIND{
+    SV = 0,
+    CL = 1
+};
 
 int init_sv_epoll()
 {
@@ -82,23 +100,149 @@ int send_client_msg(char* pmsg)
     return 0;
 }
 
-int check_new_process(){return 1;}
+int prcs_reg_info_init()
+{
+    if ((reg_list = listCreate()) == NULL) return -1;
+
+    return 0;
+}
+
+
+int gen_fifo(const char* name, int mode)
+{
+    umask(0);
+    if (-1 == mkfifo(name, S_IRUSR|S_IWUSR|S_IWGRP) &&
+            EEXIST != errno) goto ERR;
+    
+    int fd = open(name, mode);
+    if(-1 == fd) goto ERR;
+
+    return fd;
+    
+ERR:
+    perror("generate fifo failed");
+    return -1;
+}
+
+void process_reg(const prcs_reg* preg)
+{
+    int fd, dummyfd;
+    char name[FIFO_NAME_LEN] = {0};
+    GEN_SV_NAME(name, preg->pid);
+
+    fd = gen_fifo(name, O_RDONLY|O_NONBLOCK);
+    if (-1 == fd) goto ERR;
+    dummyfd = gen_fifo(name, O_WRONLY);
+    if (-1 == fd) goto ERR;
+
+    prcs_info* pi = (prcs_info*) malloc(sizeof (prcs_info));
+    if (!pi) goto CLOSE_FD;
+
+    pi->pid = preg->pid;
+    pi->mdl = preg->mdl;
+    pi->fd  = fd;
+    pi->dummyfd = dummyfd;
+
+    // add to epoll
+    struct epoll_event ev;
+    ev.events = EPOLLIN;
+    ev.data.fd = fd;
+    if (epoll_ctl(sv_epfd, EPOLL_CTL_ADD, fd, &ev) == -1) goto RELEASE;
+
+    // append reg_list
+    if (NULL == listAddNodeTail(reg_list, pi)) goto RELEASE ;
+
+    printf("process[%d] register successfully\n", preg->pid);
+
+    return;
+
+RELEASE:
+    free (pi);
+    pi = 0;
+CLOSE_FD:
+    close(fd);
+    close(dummyfd);
+ERR:
+    perror("process_reg failed");
+    return;
+
+} 
+
+void process_unreg(const prcs_reg* preg)
+{
+    listNode* node;
+    listIter* iter = listGetIterator(reg_list, AL_START_HEAD);
+    while ((node = listNext(iter)) != NULL){
+        prcs_info* pi = (prcs_info*)node->value;
+        if(!pi) continue;
+        if (pi->pid == preg->pid){
+            (void)epoll_ctl(sv_epfd, EPOLL_CTL_DEL, pi->fd, NULL);
+            // close fd
+            close(pi->fd);
+            close(pi->dummyfd);
+            // remove sv_fifo
+            char name[FIFO_NAME_LEN] = {0};
+            GEN_SV_NAME(name, pi->pid);
+            unlink(name);
+            // remove from register list
+            listDelNode(reg_list, node);
+            break;
+        }
+    }
+    
+    printf("process[%d] unregister successfully\n", preg->pid);
+}
+
+int check_process_conn()
+{
+    prcs_reg reg;
+    
+    for (;;){
+        ssize_t s = read(sv_reg_fd, &reg, sizeof(prcs_reg));
+        if (s == 0 || s == EAGAIN || s != sizeof(prcs_reg)) break;
+        print_reg_info(&reg);
+
+        switch(reg.cmd){
+            case PRCS_REG:
+                process_reg(&reg);
+                break;
+            case PRCS_UNREG:
+                process_unreg(&reg);
+                break;
+            default:
+                printf("Error: unknow process cmd[%c]\n", reg.cmd);
+                break;
+        }
+    }
+
+    return 0;
+}
+
+int check_argv(){return 0;}
+
+int initialize()
+{
+    if(prcs_reg_info_init()) return -1;
+    return 0;
+}
 
 int main (int argc, char* argv[])
 {
-    int dummy_fd;
+    int dummy_fd, dummy_reg_fd;
 
-    umask(0);
-    if (-1 == mkfifo(SV_FIFO, S_IRUSR|S_IWUSR|S_IWGRP) &&
-            EEXIST != errno){
-        perror("mkfifo error");
-        return -1;
-    }
-    
-    sv_fd = open(SV_FIFO, O_RDONLY|O_NONBLOCK);
+    assert(!check_argv());
+    assert(!initialize());
+
+    sv_fd = gen_fifo(SV_FIFO, O_RDONLY|O_NONBLOCK);
     assert(sv_fd != -1);
-    dummy_fd = open(SV_FIFO, O_WRONLY);
+    dummy_fd = gen_fifo(SV_FIFO, O_WRONLY);
     assert(dummy_fd != -1);
+
+    sv_reg_fd = gen_fifo(SV_REG_FIFO, O_RDONLY|O_NONBLOCK);
+    assert(-1 != sv_reg_fd);
+    dummy_reg_fd = gen_fifo(SV_REG_FIFO, O_WRONLY);
+    assert(-1 != dummy_reg_fd);
+
 
     /*ignore SIGPIPE while there is no client reader*/
     if (SIG_ERR == signal(SIGPIPE, SIG_IGN)) return -1;
@@ -114,7 +258,7 @@ int main (int argc, char* argv[])
     
     struct epoll_event ev_list[MAX_EVENTS];
     while(1){
-        (void)check_new_process();
+        (void)check_process_conn();
 
         int ready = epoll_wait(sv_epfd, ev_list, MAX_EVENTS, TIMEOUT_SV_EPOLL);
         assert(-1 != ready);

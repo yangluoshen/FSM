@@ -4,31 +4,15 @@
 #include <stdio.h>
 #include <unistd.h>
 
-#define PTR_SIZE (sizeof(void*))
+#include "fsm.h"
+
 
 #define MAX_CONTENT_LEN 1024
 #define SV_FIFO "/tmp/fsm_sv_fifo"
+#define SV_REG_FIFO "/tmp/fsm_sv_reg"
 #define SV_FIFO_TPL "/tmp/fsm_sv_fifo_%d"
 #define CL_FIFO_TPL "/tmp/fsm_cl_fifo_%d"
 #define FIFO_NAME_LEN (sizeof(CL_FIFO_TPL) + 20)
-
-typedef void* data_t;
-typedef size_t msg_type_t;
-typedef ssize_t error_t;
-typedef size_t module_t;
-
-/* msg head */
-typedef struct{
-    pid_t s_pid;     /*sender pid*/
-    pid_t r_pid;     /*receiver pid*/
-    module_t s_mdl;  /*sender module type*/
-    module_t r_mdl;  /*sender module type*/
-    size_t data_len;
-
-    char data[PTR_SIZE];  /* point to real data */
-} msg_t;
-
-#define MSG_HEAD_LEN (sizeof(msg_t) - PTR_SIZE)
 
 
 /** user-defined struct **/
@@ -47,6 +31,11 @@ typedef struct{
 /**** utilities ****/
 #define swap(A, B) ({  __typeof__(A) __a = (A); __typeof__(B) __b = (B); __a ^= __b; __b ^= __a; __a ^= __b;})
 
+#define GEN_SV_NAME(buf, pid) \
+    do \
+        snprintf(buf, FIFO_NAME_LEN, SV_FIFO_TPL, pid);\
+    while(0)
+    
 #define GEN_CL_NAME(buf, pid) \
     do \
         snprintf(buf, FIFO_NAME_LEN, CL_FIFO_TPL, pid);\
@@ -71,6 +60,11 @@ typedef struct{
 				((resp_t*)(__resp))->msg_type, ((resp_t*)(__resp))->err_code);\
 	}while(0)
 
+#define print_reg_info(__reg) \
+    do {\
+        printf("cmd[%d], pid[%d], module[%lu]\n",((prcs_reg*)__reg)->cmd, ((prcs_reg*)__reg)->pid,((prcs_reg*)__reg)->mdl);\
+    }while(0) 
+
 /**** enums ****/
 
 /*each Uint(module) may indicate a client(or a micro serve)*/
@@ -87,5 +81,6 @@ enum E_MODULE_TYPE{
 #define MAX_EVENTS (1024)
 #define TIMEOUT_SV_EPOLL (2 * 1000)
 #define MAX_DATA_LEN (4096)
+#define MAX_PROCESS_CONN_NUM (10240)
 
 #endif
