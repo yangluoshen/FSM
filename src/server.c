@@ -8,9 +8,19 @@
 #include <string.h>
 #include <sys/epoll.h>
 
-#include "msg.h"
 #include "adlist.h"
 #include "sds.h"
+
+#include "msg.h"
+
+#define CLOG_MAIN  /*clog essential */
+#include "clog.h"
+#define SV_LOGGER (0)
+
+#define LOG_D(fmt, ...) clog_debug(CLOG(SV_LOGGER), fmt, ##__VA_ARGS__); 
+#define LOG_ND(fmt) LOG_D(fmt, NULL); 
+#define LOG_E(fmt, ...) clog_error(CLOG(SV_LOGGER), fmt, ##__VA_ARGS__); 
+#define LOG_NE(fmt) LOG_E(fmt, NULL); 
 
 static int sv_epfd;
 static int sv_fd;
@@ -44,7 +54,7 @@ char* read_client_msg()
     /*read msg head first*/
     msg_t msg;
     if (read(sv_fd, &msg, MSG_HEAD_LEN) != MSG_HEAD_LEN){
-        perror("Error reading msg");
+        LOG_NE("Error reading msg");
         return 0; 
     }
 
@@ -53,7 +63,7 @@ char* read_client_msg()
     size_t data_len = msg.data_len;
     static char* data_buf[MAX_DATA_LEN];
     if (read(sv_fd, data_buf, data_len) != data_len){
-        perror("Error reading req");
+        LOG_NE("Error reading req.");
         return 0;
     }
     
@@ -63,7 +73,8 @@ char* read_client_msg()
     memcpy(pmsg, &msg, MSG_HEAD_LEN);
     memcpy(pmsg+MSG_HEAD_LEN, data_buf, data_len);
 
-    PRINT_MSG(&msg); puts("");
+    PRINT_MSG(&msg);
+    LOG_D("process[%d] join", msg.s_pid);
     return pmsg;
 }
 
@@ -81,7 +92,7 @@ int send_client_msg(char* pmsg)
 
     int cl_fd = open(client_name, O_WRONLY);
     if (cl_fd == -1){
-        perror("open client fifo failed");
+        LOG_E("open client fifo failed.err:%s", strerror(errno));
         free(pmsg); pmsg = 0;
         return -1;
     }
@@ -89,7 +100,7 @@ int send_client_msg(char* pmsg)
     /*response */
     size_t total_len = MSG_HEAD_LEN + msg_head->data_len;
     if (write(cl_fd, pmsg, total_len) != total_len){
-        perror("server:write error");
+        LOG_E("server:write error.err:%s", strerror(errno));
         return -1;
     } 
 
@@ -120,7 +131,7 @@ int gen_fifo(const char* name, int mode)
     return fd;
     
 ERR:
-    perror("generate fifo failed");
+    LOG_NE("generate fifo failed");
     return -1;
 }
 
@@ -153,6 +164,7 @@ void process_reg(const prcs_reg* preg)
     if (NULL == listAddNodeTail(reg_list, pi)) goto RELEASE ;
 
     printf("process[%d] register successfully\n", preg->pid);
+    LOG_D("process[%d] register successfully\n", preg->pid);
 
     return;
 
@@ -163,7 +175,7 @@ CLOSE_FD:
     close(fd);
     close(dummyfd);
 ERR:
-    perror("process_reg failed");
+    LOG_NE("process_reg failed");
     return;
 
 } 
@@ -191,6 +203,7 @@ void process_unreg(const prcs_reg* preg)
     }
     
     printf("process[%d] unregister successfully\n", preg->pid);
+    LOG_D("process[%d] unregister successfully\n", preg->pid);
 }
 
 int check_process_conn()
@@ -210,7 +223,7 @@ int check_process_conn()
                 process_unreg(&reg);
                 break;
             default:
-                printf("Error: unknow process cmd[%c]\n", reg.cmd);
+                LOG_E("Error: unknow process cmd[%c]\n", reg.cmd);
                 break;
         }
     }
@@ -220,9 +233,26 @@ int check_process_conn()
 
 int check_argv(){return 0;}
 
+int init_log()
+{
+    char sv_log_file[32] = {0};
+    snprintf(sv_log_file,32, "/tmp/fsm_sv_%d.log", getpid());
+
+    int r = clog_init_path(SV_LOGGER, sv_log_file);
+    if (r != 0){
+        LOG_NE("init server log failed");
+        return 1;
+    }
+    
+    return 0;
+}
+
+
 int initialize()
 {
-    if(prcs_reg_info_init()) return -1;
+    if (prcs_reg_info_init()) return -1;
+    if (init_log() != 0) return -1;
+
     return 0;
 }
 
@@ -252,7 +282,7 @@ int main (int argc, char* argv[])
     ev.events = EPOLLIN;
     ev.data.fd = sv_fd;
     if (epoll_ctl(sv_epfd, EPOLL_CTL_ADD, sv_fd, &ev) == -1){
-        perror("epoll_ctl failed");
+        LOG_E("epoll_ctl failed. err[%s]", strerror(errno));
         return -1;
     }
     
@@ -271,13 +301,13 @@ int main (int argc, char* argv[])
                 }
             }
             else if (ev_list[i].events & (EPOLLHUP|EPOLLERR)){
-                perror("epoll wait");
+                LOG_E("epoll wait.err:%s", strerror(errno));
                 return -1;
             }
         }
     }
     
-    puts("server exit");
+    LOG_ND("server exit");
     return 0;
 }
 

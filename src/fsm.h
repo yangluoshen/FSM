@@ -6,8 +6,6 @@ typedef size_t msg_type_t;
 typedef ssize_t error_t;
 typedef size_t module_t;
 
-#define PTR_SIZE (sizeof(void*))
-
 #define PRCS_INFO \
 
 #define MSG_HEAD \
@@ -22,10 +20,10 @@ typedef size_t module_t;
 typedef struct{
     MSG_HEAD
 
-    char data[PTR_SIZE];  /* point to real data */
+    char data[];    /* point to real data */
 } msg_t;
 
-#define MSG_HEAD_LEN (sizeof(msg_t) - PTR_SIZE)
+#define MSG_HEAD_LEN (sizeof(msg_t))
 
 int fms_send_msg(void* pmsg);
 

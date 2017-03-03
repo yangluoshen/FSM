@@ -1,6 +1,7 @@
 
 FLAGS= -I../deps/sds/ 
 FLAGS+= -I../deps/adlist/
+FLAGS+= -I../deps/clog/
 FLAGS+= -ladlist
 
 all: server client reg
