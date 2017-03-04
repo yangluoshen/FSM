@@ -1,2 +1,3 @@
 test/
-libsds.so
+libsds.a
+libadlist.a

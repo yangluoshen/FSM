@@ -12,6 +12,7 @@
 
 static char client_fifo [FIFO_NAME_LEN];
 static char dfl_content[] = "hello server";
+const module_t ME_MDL = YAU;
 
 void remove_cl_fifo()
 {
@@ -45,23 +46,55 @@ int read_resp()
     return 0;
 }
 
-int main(int argc, char* argv[])
+int gen_fifo(const char* name, int mode)
 {
-    int  sv_fd;
-    char *content = dfl_content;
+    umask(0);
+    if (-1 == mkfifo(name, S_IRUSR|S_IWUSR|S_IWGRP) &&
+            EEXIST != errno) goto ERR;
     
-    if (argc > 1) content = argv[1];
+    int fd = open(name, mode);
+    if(-1 == fd) goto ERR;
+
+    return fd;
+    
+ERR:
+    perror("generate fifo failed");
+    return -1;
+}
+
+int initialize()
+{
+    int ret = fsm_prcs_reg(ME_MDL);
+    if (ret != 0) return -1;
 
     umask(0);
     snprintf(client_fifo, FIFO_NAME_LEN, CL_FIFO_TPL, getpid());
 
+    /*while read msg, client will read from client_fifo*/
     if (mkfifo(client_fifo, S_IRUSR|S_IWUSR|S_IWGRP) == -1 &&
         EEXIST != errno){
         perror("client mkfifo failed");
         return -1;
     }
+    
     atexit(remove_cl_fifo);
+    atexit(fsm_prcs_unreg);
 
+    return 0;
+}
+int main(int argc, char* argv[])
+{
+    char *content = dfl_content;
+
+    if (0 != initialize()){
+        perror("init failed");
+        return -1;
+    }
+
+    if (argc > 1) content = argv[1];
+
+
+    // pack message
     size_t data_len = sizeof(msg_type_t) + strlen(content) + 1;
     size_t msg_len = MSG_HEAD_LEN + data_len;
     char* req_buf = (char*) malloc(msg_len);
@@ -70,7 +103,7 @@ int main(int argc, char* argv[])
     msg_t* pmsg = (msg_t*)req_buf; 
     pmsg->s_pid = getpid();
     pmsg->r_pid = pmsg->s_pid;
-    pmsg->s_mdl = YAU;
+    pmsg->s_mdl = ME_MDL;
     pmsg->r_mdl = DVU;
     pmsg->data_len = data_len;
     
@@ -81,6 +114,7 @@ int main(int argc, char* argv[])
     print_req_msg(pmsg, preq); puts("");
 
 
+    /*
     sv_fd = open(SV_FIFO, O_WRONLY);
     if (-1 == sv_fd){
         perror("open sv fifo failed");
@@ -91,7 +125,12 @@ int main(int argc, char* argv[])
         perror("client: write error");
         return -1;
     }
-
+    */
+    sleep(5);
+    if(SM_OK != fsm_send_msg(pmsg)){
+        perror("send msg failed");
+        return -1;
+    }
 
     if(-1 == read_resp()){
         perror("read_response");

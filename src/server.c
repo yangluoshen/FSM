@@ -23,8 +23,8 @@
 #define LOG_NE(fmt) LOG_E(fmt, NULL); 
 
 static int sv_epfd;
-static int sv_fd;
 static int sv_reg_fd;
+static int dummy_reg_fd;
 //static unsigned int max_conn_num = MAX_PROCESS_CONN_NUM;
 
 list* reg_list;
@@ -41,6 +41,8 @@ enum FIFO_KIND{
     CL = 1
 };
 
+int gen_fifo(const char* name, int mode);
+
 int init_sv_epoll()
 {
     sv_epfd = epoll_create(MAX_SV_EPOLL_NUM);
@@ -49,11 +51,11 @@ int init_sv_epoll()
     return sv_epfd;
 }
 
-char* read_client_msg()
+char* read_client_msg(int fd)
 {
     /*read msg head first*/
     msg_t msg;
-    if (read(sv_fd, &msg, MSG_HEAD_LEN) != MSG_HEAD_LEN){
+    if (read(fd, &msg, MSG_HEAD_LEN) != MSG_HEAD_LEN){
         LOG_NE("Error reading msg");
         return 0; 
     }
@@ -62,7 +64,7 @@ char* read_client_msg()
      * data_len tell us how long the custome data is*/
     size_t data_len = msg.data_len;
     static char* data_buf[MAX_DATA_LEN];
-    if (read(sv_fd, data_buf, data_len) != data_len){
+    if (read(fd, data_buf, data_len) != data_len){
         LOG_NE("Error reading req.");
         return 0;
     }
@@ -115,6 +117,11 @@ int prcs_reg_info_init()
 {
     if ((reg_list = listCreate()) == NULL) return -1;
 
+    sv_reg_fd = gen_fifo(SV_REG_FIFO, O_RDONLY|O_NONBLOCK);
+    assert(-1 != sv_reg_fd);
+    dummy_reg_fd = gen_fifo(SV_REG_FIFO, O_WRONLY);
+    assert(-1 != dummy_reg_fd);
+
     return 0;
 }
 
@@ -164,7 +171,7 @@ void process_reg(const prcs_reg* preg)
     if (NULL == listAddNodeTail(reg_list, pi)) goto RELEASE ;
 
     printf("process[%d] register successfully\n", preg->pid);
-    LOG_D("process[%d] register successfully\n", preg->pid);
+    LOG_D("process[%d] register successfully", preg->pid);
 
     return;
 
@@ -203,7 +210,7 @@ void process_unreg(const prcs_reg* preg)
     }
     
     printf("process[%d] unregister successfully\n", preg->pid);
-    LOG_D("process[%d] unregister successfully\n", preg->pid);
+    LOG_D("process[%d] unregister successfully", preg->pid);
 }
 
 int check_process_conn()
@@ -253,39 +260,20 @@ int initialize()
     if (prcs_reg_info_init()) return -1;
     if (init_log() != 0) return -1;
 
+    (void)init_sv_epoll();
+
     return 0;
 }
 
 int main (int argc, char* argv[])
 {
-    int dummy_fd, dummy_reg_fd;
 
     assert(!check_argv());
     assert(!initialize());
 
-    sv_fd = gen_fifo(SV_FIFO, O_RDONLY|O_NONBLOCK);
-    assert(sv_fd != -1);
-    dummy_fd = gen_fifo(SV_FIFO, O_WRONLY);
-    assert(dummy_fd != -1);
-
-    sv_reg_fd = gen_fifo(SV_REG_FIFO, O_RDONLY|O_NONBLOCK);
-    assert(-1 != sv_reg_fd);
-    dummy_reg_fd = gen_fifo(SV_REG_FIFO, O_WRONLY);
-    assert(-1 != dummy_reg_fd);
-
-
     /*ignore SIGPIPE while there is no client reader*/
     if (SIG_ERR == signal(SIGPIPE, SIG_IGN)) return -1;
 
-    init_sv_epoll();
-    struct epoll_event ev;
-    ev.events = EPOLLIN;
-    ev.data.fd = sv_fd;
-    if (epoll_ctl(sv_epfd, EPOLL_CTL_ADD, sv_fd, &ev) == -1){
-        LOG_E("epoll_ctl failed. err[%s]", strerror(errno));
-        return -1;
-    }
-    
     struct epoll_event ev_list[MAX_EVENTS];
     while(1){
         (void)check_process_conn();
@@ -296,9 +284,8 @@ int main (int argc, char* argv[])
         int i;
         for (i = 0; i < ready; ++i){
             if (ev_list[i].events & EPOLLIN){
-                if (ev_list[i].data.fd == sv_fd){
-                    if (-1 == send_client_msg(read_client_msg())) continue;
-                }
+                if (-1 == send_client_msg(read_client_msg(ev_list[i].data.fd))) 
+                    continue;
             }
             else if (ev_list[i].events & (EPOLLHUP|EPOLLERR)){
                 LOG_E("epoll wait.err:%s", strerror(errno));

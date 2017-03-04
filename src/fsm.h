@@ -1,6 +1,10 @@
 #ifndef __FSM_H
 #define __FSM_H
 
+#include <stdio.h>
+//#include <unistd.h>
+#include <sys/types.h>
+
 typedef void* data_t;
 typedef size_t msg_type_t;
 typedef ssize_t error_t;
@@ -20,12 +24,14 @@ typedef size_t module_t;
 typedef struct{
     MSG_HEAD
 
-    char data[];    /* point to real data */
+    char data[];    /* point to custome data */
 } msg_t;
 
 #define MSG_HEAD_LEN (sizeof(msg_t))
 
-int fms_send_msg(void* pmsg);
+int fsm_send_msg(void* pmsg);
+int fsm_prcs_reg(module_t type);
+void fsm_prcs_unreg(void);
 
 enum SendMsgErrNo{
     SM_OK = 0,
@@ -39,6 +45,7 @@ enum PRCS_CMD{
     PRCS_UNREG
 };
 
+
 /** process register info **/
 #define PRCS_BASE \
     pid_t pid; \
@@ -48,5 +55,20 @@ typedef struct{
     char cmd;
     PRCS_BASE
 }prcs_reg;
+
+#define SV_REG_FIFO "/tmp/fsm_sv_reg"
+#define SV_FIFO_TPL "/tmp/fsm_sv_fifo_%d"
+#define CL_FIFO_TPL "/tmp/fsm_cl_fifo_%d"
+#define FIFO_NAME_LEN (sizeof(CL_FIFO_TPL) + 20)
+
+#define GEN_SV_NAME(buf, pid) \
+    do \
+        snprintf(buf, FIFO_NAME_LEN, SV_FIFO_TPL, pid);\
+    while(0)
+    
+#define GEN_CL_NAME(buf, pid) \
+    do \
+        snprintf(buf, FIFO_NAME_LEN, CL_FIFO_TPL, pid);\
+    while(0)
 
 #endif  /*__FSM_H*/

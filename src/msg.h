@@ -8,11 +8,7 @@
 
 
 #define MAX_CONTENT_LEN 1024
-#define SV_FIFO "/tmp/fsm_sv_fifo"
-#define SV_REG_FIFO "/tmp/fsm_sv_reg"
-#define SV_FIFO_TPL "/tmp/fsm_sv_fifo_%d"
-#define CL_FIFO_TPL "/tmp/fsm_cl_fifo_%d"
-#define FIFO_NAME_LEN (sizeof(CL_FIFO_TPL) + 20)
+//#define SV_FIFO "/tmp/fsm_sv_fifo"
 
 
 /** user-defined struct **/
@@ -31,15 +27,6 @@ typedef struct{
 /**** utilities ****/
 #define swap(A, B) ({  __typeof__(A) __a = (A); __typeof__(B) __b = (B); __a ^= __b; __b ^= __a; __a ^= __b;})
 
-#define GEN_SV_NAME(buf, pid) \
-    do \
-        snprintf(buf, FIFO_NAME_LEN, SV_FIFO_TPL, pid);\
-    while(0)
-    
-#define GEN_CL_NAME(buf, pid) \
-    do \
-        snprintf(buf, FIFO_NAME_LEN, CL_FIFO_TPL, pid);\
-    while(0)
         
 /**** printer ****/
 #define PRINT_MSG(__msg) \
