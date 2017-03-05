@@ -29,6 +29,9 @@ typedef struct{
 
 #define MSG_HEAD_LEN (sizeof(msg_t))
 
+
+
+/** client interface **/
 int fsm_send_msg(void* pmsg);
 int fsm_prcs_reg(module_t type);
 void fsm_prcs_unreg(void);
@@ -45,6 +48,14 @@ enum PRCS_CMD{
     PRCS_UNREG
 };
 
+/*each Uint(module) may indicate a client(or a micro serve)*/
+enum E_MODULE_TYPE{
+	DVU = 0,
+	YAU,
+	BYU,
+
+	UKU    /*unknown unit*/
+};
 
 /** process register info **/
 #define PRCS_BASE \

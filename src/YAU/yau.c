@@ -1,0 +1,45 @@
+
+#include "fsm.h"
+#include "dvu_yau_msg.h"
+#include <unistd.h>
+#include <string.h>
+#include <malloc.h>
+#include <assert.h>
+
+void* pack_msg()
+{
+    // pack message
+    char content[] = "nice to see you!";
+    size_t data_len = sizeof(msg_type_t) + strlen(content) + 1;
+    size_t msg_len = MSG_HEAD_LEN + data_len;
+    char* req_buf = (char*) malloc(msg_len);
+    assert(req_buf);
+
+    msg_t* pmsg = (msg_t*)req_buf; 
+    pmsg->s_pid = getpid();
+    pmsg->r_pid = -1;
+    pmsg->s_mdl = YAU;
+    pmsg->r_mdl = DVU;
+    pmsg->data_len = data_len;
+    
+    req_t* preq = (req_t*)pmsg->data;
+    preq->msg_type = YAU_DVU_CHAT_REQ;
+    memcpy(preq->what, content, strlen(content) + 1);
+    
+    return req_buf;
+}
+
+void say_hello_to_dvu()
+{
+    void * pmsg = pack_msg();
+    /* fsm_send_msg is universal interfase,
+     * which allow client send msg to serve*/
+    if(SM_OK != fsm_send_msg(pmsg)){
+        perror("send msg failed");
+    }
+}
+
+void process_dvu_req(void* pmsg)
+{
+
+}

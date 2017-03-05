@@ -22,6 +22,12 @@
 #define LOG_E(fmt, ...) clog_error(CLOG(SV_LOGGER), fmt, ##__VA_ARGS__); 
 #define LOG_NE(fmt) LOG_E(fmt, NULL); 
 
+#define MAX_SV_EPOLL_NUM (2048)
+#define MAX_EVENTS (1024)
+#define TIMEOUT_SV_EPOLL (1 * 1000)
+#define MAX_DATA_LEN (4096)
+#define MAX_PROCESS_CONN_NUM (10240)
+
 static int sv_epfd;
 static int sv_reg_fd;
 static int dummy_reg_fd;
@@ -42,6 +48,7 @@ enum FIFO_KIND{
 };
 
 int gen_fifo(const char* name, int mode);
+int module_chosen(void* m);
 
 int init_sv_epoll()
 {
@@ -89,8 +96,14 @@ int send_client_msg(char* pmsg)
     msg_head = (msg_t*)pmsg;
 
     char client_name[FIFO_NAME_LEN] = {0};
+
+    pid_t r_pid = module_chosen(pmsg);
+    if (r_pid == -1){
+        LOG_E("module_chosen failed.module[%lu], pid[%d]", msg_head->r_mdl, msg_head->r_pid);
+        return -1;
+    }
     /* get client fifo name */
-    GEN_CL_NAME(client_name, msg_head->r_pid);
+    GEN_CL_NAME(client_name, r_pid);
 
     int cl_fd = open(client_name, O_WRONLY);
     if (cl_fd == -1){
@@ -103,6 +116,7 @@ int send_client_msg(char* pmsg)
     size_t total_len = MSG_HEAD_LEN + msg_head->data_len;
     if (write(cl_fd, pmsg, total_len) != total_len){
         LOG_E("server:write error.err:%s", strerror(errno));
+        free(pmsg); pmsg = 0;
         return -1;
     } 
 
@@ -159,7 +173,7 @@ void process_reg(const prcs_reg* preg)
     pi->pid = preg->pid;
     pi->mdl = preg->mdl;
     pi->fd  = fd;
-    pi->dummyfd = dummyfd;
+    pi->dummyfd = dummyfd; /*dummyfd is essential*/
 
     // add to epoll
     struct epoll_event ev;
@@ -186,6 +200,28 @@ ERR:
     return;
 
 } 
+
+/* return : -1 means not exist
+ *        : sepecific pid means success
+ */
+int is_module_exist(module_t mdl, pid_t pid)
+{
+    // if pid is -1 ,just find if module is exist in the queue
+    listNode* node;
+    listIter* iter = listGetIterator(reg_list, AL_START_HEAD);
+    while ((node = listNext(iter)) != NULL){
+        prcs_info* pi = (prcs_info*) node->value;
+        if (mdl == pi->mdl){
+            if (pid == -1)
+                return pi->pid;
+            else if(pid == pi->mdl)
+                return pi->pid;
+            else
+                return -1;
+        } 
+    }
+    return -1;
+}
 
 void process_unreg(const prcs_reg* preg)
 {
@@ -238,7 +274,7 @@ int check_process_conn()
     return 0;
 }
 
-int check_argv(){return 0;}
+int check_argv(char* argv[]){return 0;}
 
 int init_log()
 {
@@ -267,8 +303,7 @@ int initialize()
 
 int main (int argc, char* argv[])
 {
-
-    assert(!check_argv());
+    assert(!check_argv(argv));
     assert(!initialize());
 
     /*ignore SIGPIPE while there is no client reader*/
@@ -284,7 +319,8 @@ int main (int argc, char* argv[])
         int i;
         for (i = 0; i < ready; ++i){
             if (ev_list[i].events & EPOLLIN){
-                if (-1 == send_client_msg(read_client_msg(ev_list[i].data.fd))) 
+                int curfd = ev_list[i].data.fd;
+                if (-1 == send_client_msg(read_client_msg(curfd))) 
                     continue;
             }
             else if (ev_list[i].events & (EPOLLHUP|EPOLLERR)){
@@ -298,3 +334,11 @@ int main (int argc, char* argv[])
     return 0;
 }
 
+int module_chosen(void* m)
+{
+    if (!m) return -1;
+
+    msg_t* pmsg = (msg_t*) m;
+
+    return is_module_exist(pmsg->r_mdl, pmsg->r_pid);
+}
