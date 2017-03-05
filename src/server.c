@@ -83,7 +83,7 @@ char* read_client_msg(int fd)
     memcpy(pmsg+MSG_HEAD_LEN, data_buf, data_len);
 
     PRINT_MSG(&msg);
-    LOG_D("process[%d] join", msg.s_pid);
+    LOG_D("process[%d]->process[%d]", msg.s_pid, msg.r_pid);
     return pmsg;
 }
 
@@ -214,7 +214,7 @@ int is_module_exist(module_t mdl, pid_t pid)
         if (mdl == pi->mdl){
             if (pid == -1)
                 return pi->pid;
-            else if(pid == pi->mdl)
+            else if(pid == pi->pid)
                 return pi->pid;
             else
                 return -1;

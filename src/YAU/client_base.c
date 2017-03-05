@@ -12,7 +12,6 @@
 #include "msg.h"
 
 static char client_fifo [FIFO_NAME_LEN];
-//static char dfl_content[] = "hello server";
 const int epoll_size = 32;
 
 static int epfd;
@@ -102,9 +101,13 @@ int initialize()
     
     int cl_fd = open(client_fifo, O_RDONLY|O_NONBLOCK);
     if (-1 == cl_fd) return -1;
+    /* dummy_clfd is essential. 
+     * if not define dummy_clfd (in write only), 
+     * read fifo will throw failed while server close its write file descriptor*/
     dummy_clfd = open(client_fifo, O_WRONLY);
     if (-1 == dummy_clfd) return -1;
 
+    /* add cl_fd to epoll */
     epfd = epoll_create(epoll_size);
     if (-1 == epfd) return -1;
     
@@ -160,7 +163,7 @@ void custome_processing(int fd)
     for (i = 0; i < DRIVER_SZ; ++i){
         if (type == g_msg_driver[i].mdl){
             if (!g_msg_driver[i].func) continue;
-            g_msg_driver[i].func(pmsg->data);
+            g_msg_driver[i].func(pmsg);
         }
     }
     

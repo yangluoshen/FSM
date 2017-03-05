@@ -5,6 +5,7 @@
 #include <string.h>
 #include <malloc.h>
 #include <assert.h>
+#include <stdlib.h>
 
 void* pack_msg()
 {
@@ -39,7 +40,25 @@ void say_hello_to_dvu()
     }
 }
 
-void process_dvu_req(void* pmsg)
-{
 
+void dvu_chat(msg_t* data)
+{
+    printf("dvu:%s\n", ((req_t*)(data->data))->what);
+    //chat_yau_resp(data->s_pid, data->s_mdl);
+    exit(1);
+}
+
+void process_dvu_req(void* data)
+{
+    if (!data) return;
+    msg_t* pmsg = (msg_t*) data;
+    req_t* preq = (req_t*) pmsg->data;
+    switch(preq->msg_type){
+        case DVU_YAU_CHAT_REQ: 
+            dvu_chat(pmsg);
+            break;
+        default:
+            puts("unknown msg type");
+            break;
+    }
 }
