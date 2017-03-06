@@ -212,15 +212,15 @@ int is_module_exist(module_t mdl, pid_t pid)
     while ((node = listNext(iter)) != NULL){
         prcs_info* pi = (prcs_info*) node->value;
         if (mdl == pi->mdl){
-            if (pid == -1)
+            if (pid == -1 || pid == pi->pid){
+                free (iter);
                 return pi->pid;
-            else if(pid == pi->pid)
-                return pi->pid;
-            else
-                return -1;
+            }
         } 
     }
+    free (iter);
     return -1;
+
 }
 
 void process_unreg(const prcs_reg* preg)
@@ -244,6 +244,7 @@ void process_unreg(const prcs_reg* preg)
             break;
         }
     }
+    free(iter);
     
     printf("process[%d] unregister successfully\n", preg->pid);
     LOG_D("process[%d] unregister successfully", preg->pid);

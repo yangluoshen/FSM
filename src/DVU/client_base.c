@@ -160,8 +160,11 @@ void custome_processing(int fd)
     int i;
     for (i = 0; i < DRIVER_SZ; ++i){
         if (type == g_msg_driver[i].mdl){
-            if (!g_msg_driver[i].func) continue;
+            if (!g_msg_driver[i].func)
+                continue;
+
             g_msg_driver[i].func(pmsg);
+            break;
         }
     }
     
