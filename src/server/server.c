@@ -11,7 +11,8 @@
 #include "adlist.h"
 #include "sds.h"
 
-#include "msg.h"
+#include "server.h"
+
 
 #define CLOG_MAIN  /*clog essential */
 #include "clog.h"
@@ -95,35 +96,23 @@ int send_client_msg(char* pmsg)
     msg_t* msg_head;
     msg_head = (msg_t*)pmsg;
 
-    char client_name[FIFO_NAME_LEN] = {0};
-
     pid_t r_pid = module_chosen(pmsg);
     if (r_pid == -1){
         LOG_E("module_chosen failed.module[%lu], pid[%d]", msg_head->r_mdl, msg_head->r_pid);
         return -1;
     }
     /* get client fifo name */
+    char client_name[FIFO_NAME_LEN] = {0};
     GEN_CL_NAME(client_name, r_pid);
 
-    int cl_fd = open(client_name, O_WRONLY);
-    if (cl_fd == -1){
-        LOG_E("open client fifo failed.err:%s", strerror(errno));
+    if (SM_OK != fsm_send_msg(client_name, pmsg)){
         free(pmsg); pmsg = 0;
+        LOG_E("fsm_send_msg failed, err[%s]", strerror(errno)); 
         return -1;
     }
-    
-    /*response */
-    size_t total_len = MSG_HEAD_LEN + msg_head->data_len;
-    if (write(cl_fd, pmsg, total_len) != total_len){
-        LOG_E("server:write error.err:%s", strerror(errno));
-        free(pmsg); pmsg = 0;
-        return -1;
-    } 
 
     /*pmsg alloced in read_client_msg() */
     free(pmsg); pmsg = 0;
-
-    assert(close(cl_fd) != -1);
     return 0;
 }
 
@@ -343,3 +332,4 @@ int module_chosen(void* m)
 
     return is_module_exist(pmsg->r_mdl, pmsg->r_pid);
 }
+

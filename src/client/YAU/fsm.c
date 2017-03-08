@@ -4,7 +4,7 @@
 #include <stdio.h>
 #include <fcntl.h>
 
-int __send_request(const char* name, void* msg, size_t len)
+int __send_request(const char* name, const void* msg, size_t len)
 {
     int fd = open(name, O_WRONLY);
     if (-1 == fd) return -1;
@@ -37,18 +37,21 @@ void fsm_prcs_unreg(void)
     (void)__send_request(SV_REG_FIFO, &reg, sizeof(reg));
 }
 
-int fsm_send_msg(void* m)
+int fsm_send_msg(const char* fifo_name, const void* m)
 {
     if (!m) return SM_NULL;
 
-    char sv_fifo_name[FIFO_NAME_LEN];
-
-    msg_t* pmsg = (msg_t*)m;
-    GEN_SV_NAME(sv_fifo_name, pmsg->s_pid);
+    const msg_t* pmsg = (const msg_t*)m;
     size_t msg_len = MSG_HEAD_LEN + pmsg->data_len;
 
-    int ret = __send_request(sv_fifo_name, pmsg, msg_len);
+    int ret = __send_request(fifo_name, pmsg, msg_len);
     if(ret != 0) return SM_FAILED;
 
     return SM_OK;
+}
+
+int start_timer(fsm_t fsm_no, time_t seconds)
+{
+
+    return 0;
 }

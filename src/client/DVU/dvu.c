@@ -6,6 +6,7 @@
 #include <unistd.h>
 
 void chat_yau_resp(pid_t r_pid, module_t r_mdl);
+int send_msg(void* m);
 
 void yau_chat(msg_t* data)
 {
@@ -47,7 +48,7 @@ void chat_yau_resp(pid_t r_pid, module_t r_mdl)
     preq->msg_type = DVU_YAU_CHAT_REQ;
     memcpy(preq->what, content, sizeof(content));
 
-    if (SM_OK != fsm_send_msg(pmsg)){
+    if (SM_OK != send_msg(pmsg)){
         perror("send msg failed");
         return ;
     }

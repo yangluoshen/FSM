@@ -7,6 +7,8 @@
 #include <assert.h>
 #include <stdlib.h>
 
+int send_msg(void*);
+
 void* pack_msg()
 {
     // pack message
@@ -33,9 +35,7 @@ void* pack_msg()
 void say_hello_to_dvu()
 {
     void * pmsg = pack_msg();
-    /* fsm_send_msg is universal interfase,
-     * which allow client send msg to serve*/
-    if(SM_OK != fsm_send_msg(pmsg)){
+    if(SM_OK != send_msg(pmsg)){
         perror("send msg failed");
     }
 }

@@ -14,12 +14,17 @@
 static char client_fifo [FIFO_NAME_LEN];
 const int epoll_size = 32;
 
-static int epfd;
+static int g_client_epfd;
 static int dummy_clfd;
 
-void process_dvu_req(void* pmsg);
+/* client base essential */
+int fsm_prcs_reg(module_t type);
+void fsm_prcs_unreg(void);
+int __send_request(const char* name, const void* msg, size_t len);
+
+/* custome */
+void process_yau_req(void* pmsg);
 void custome_processing(int fd);
-void say_hello_to_dvu();
 
 typedef void (*drive_func)(void*);
 typedef struct{
@@ -29,11 +34,11 @@ typedef struct{
 }msg_driver_node;
 
 /** client must implement the following */
-const module_t ME_MDL = YAU;  /* the module type you want */
+const module_t ME_MDL = DVU;  /* the module type you want */
 // define custome entry while msg comes 
 msg_driver_node g_msg_driver[] = 
 {
-    {DVU, process_dvu_req}
+    {YAU, process_yau_req}
 
 };
 #define DRIVER_SZ (sizeof(g_msg_driver)/sizeof(msg_driver_node))
@@ -108,13 +113,13 @@ int initialize()
     if (-1 == dummy_clfd) return -1;
 
     /* add cl_fd to epoll */
-    epfd = epoll_create(epoll_size);
-    if (-1 == epfd) return -1;
+    g_client_epfd = epoll_create(epoll_size);
+    if (-1 == g_client_epfd) return -1;
     
     struct epoll_event ev;
     ev.events = EPOLLIN;
     ev.data.fd = cl_fd; 
-    if (epoll_ctl(epfd, EPOLL_CTL_ADD, cl_fd, &ev) == -1)
+    if (epoll_ctl(g_client_epfd, EPOLL_CTL_ADD, cl_fd, &ev) == -1)
         return -1;
 
     atexit(fsm_prcs_unreg);
@@ -133,7 +138,7 @@ int main(int argc, char* argv[])
 
     struct epoll_event ev_list[epoll_size];
     while (1){
-        int ready = epoll_wait(epfd, ev_list, epoll_size, 5000);
+        int ready = epoll_wait(g_client_epfd, ev_list, epoll_size, -1);
         if (-1 == ready){
             perror("epoll_wait");
             continue;
@@ -148,7 +153,6 @@ int main(int argc, char* argv[])
                 return -1;
             }
         }
-        say_hello_to_dvu();
     }
 
     return 0;
@@ -174,4 +178,33 @@ void custome_processing(int fd)
 }
 
 
+/* send a msg to server */
+int send_msg(void* m)
+{
+    char sv_fifo_name[FIFO_NAME_LEN] = {0};
+
+    msg_t* pmsg = (msg_t*)m;
+
+    GEN_SV_NAME(sv_fifo_name, pmsg->s_pid);
+    return fsm_send_msg(sv_fifo_name, m);
+}
+
+int fsm_prcs_reg(module_t type)
+{
+    prcs_reg reg;
+    reg.cmd = PRCS_REG;
+    reg.pid = getpid();
+    reg.mdl = type;
+
+    return __send_request(SV_REG_FIFO, &reg, sizeof(reg));
+}
+
+void fsm_prcs_unreg(void)
+{
+    prcs_reg reg;
+    reg.cmd = PRCS_UNREG;
+    reg.pid = getpid();
+
+    (void)__send_request(SV_REG_FIFO, &reg, sizeof(reg));
+}
 

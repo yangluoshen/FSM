@@ -9,6 +9,7 @@ typedef void* data_t;
 typedef size_t msg_type_t;
 typedef ssize_t error_t;
 typedef size_t module_t;
+typedef size_t fsm_t;
 
 #define PRCS_INFO \
 
@@ -32,9 +33,8 @@ typedef struct{
 
 
 /** client interface **/
-int fsm_send_msg(void* pmsg);
-int fsm_prcs_reg(module_t type);
-void fsm_prcs_unreg(void);
+int fsm_send_msg(const char* fifo_name, const void* pmsg);
+int start_timer(fsm_t fsm_no, time_t seconds);
 
 enum SendMsgErrNo{
     SM_OK = 0,
