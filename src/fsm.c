@@ -32,8 +32,3 @@ int fsm_send_msg(const char* fifo_name, const void* m)
     return SM_OK;
 }
 
-int start_timer(fsm_t fsm_no, time_t seconds)
-{
-
-    return 0;
-}

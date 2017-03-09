@@ -1,15 +1,33 @@
+
+#define _POSIX_C_SOURCE  199309L
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <fcntl.h>
 #include <assert.h>
 #include <signal.h>
-#include <errno.h>
 #include <malloc.h>
 #include <string.h>
 #include <stdlib.h>
 #include <sys/epoll.h>
+#include <errno.h>
 
+#include <time.h>
+#include <sys/timerfd.h>
 #include "msg.h"
+#include "adlist.h"
+
+typedef struct {
+    int timerfd;
+    fsm_t fsmid;
+
+}fsm_timer;
+
+enum TIMERTYPE{
+    NO_LOOP = 0,
+    LOOP = 1
+};
+
+static list* timer_list;
 
 static char client_fifo [FIFO_NAME_LEN];
 const int epoll_size = 32;
@@ -18,14 +36,13 @@ static int g_client_epfd;
 static int dummy_clfd;
 
 /* client base essential */
-int fsm_prcs_reg(module_t type);
-void fsm_prcs_unreg(void);
+int proc_prcs_reg(module_t type);
+void proc_prcs_unreg(void);
 int __send_request(const char* name, const void* msg, size_t len);
 
 /* custome */
-void process_dvu_req(void* pmsg);
+void process_yau_req(void* pmsg);
 void custome_processing(int fd);
-void say_hello_to_dvu();
 
 typedef void (*drive_func)(void*);
 typedef struct{
@@ -35,11 +52,11 @@ typedef struct{
 }msg_driver_node;
 
 /** client must implement the following */
-const module_t ME_MDL = YAU;  /* the module type you want */
+const module_t ME_MDL = DVU;  /* the module type you want */
 // define custome entry while msg comes 
 msg_driver_node g_msg_driver[] = 
 {
-    {DVU, process_dvu_req}
+    {YAU, process_yau_req}
 
 };
 #define DRIVER_SZ (sizeof(g_msg_driver)/sizeof(msg_driver_node))
@@ -89,14 +106,19 @@ ERR:
     return -1;
 }
 
-int initialize()
+int client_login()
 {
-    int ret = fsm_prcs_reg(ME_MDL);
+    int ret = proc_prcs_reg(ME_MDL);
     if (ret != 0) return -1;
+    atexit(proc_prcs_unreg);
+    return ret;
+}
 
-    umask(0);
+int epoll_init()
+{
     snprintf(client_fifo, FIFO_NAME_LEN, CL_FIFO_TPL, getpid());
 
+    umask(0);
     /*while read msg, client will read from client_fifo*/
     if (mkfifo(client_fifo, S_IRUSR|S_IWUSR|S_IWGRP) == -1 &&
         EEXIST != errno){
@@ -123,7 +145,22 @@ int initialize()
     if (epoll_ctl(g_client_epfd, EPOLL_CTL_ADD, cl_fd, &ev) == -1)
         return -1;
 
-    atexit(fsm_prcs_unreg);
+    return 0;
+
+}
+
+int timer_init()
+{
+    if ((timer_list = listCreate()) == NULL) return -1;
+    return 0;
+}
+
+int initialize()
+{
+    if (-1 == client_login()) return -1;
+    if (-1 == epoll_init()) return -1;
+    if (-1 == timer_init()) return -1;
+
     return 0;
 }
 
@@ -139,7 +176,7 @@ int main(int argc, char* argv[])
 
     struct epoll_event ev_list[epoll_size];
     while (1){
-        int ready = epoll_wait(g_client_epfd, ev_list, epoll_size, 5000);
+        int ready = epoll_wait(g_client_epfd, ev_list, epoll_size, -1);
         if (-1 == ready){
             perror("epoll_wait");
             continue;
@@ -154,7 +191,6 @@ int main(int argc, char* argv[])
                 return -1;
             }
         }
-        say_hello_to_dvu();
     }
 
     return 0;
@@ -191,7 +227,7 @@ int send_msg(void* m)
     return fsm_send_msg(sv_fifo_name, m);
 }
 
-int fsm_prcs_reg(module_t type)
+int proc_prcs_reg(module_t type)
 {
     prcs_reg reg;
     reg.cmd = PRCS_REG;
@@ -201,7 +237,7 @@ int fsm_prcs_reg(module_t type)
     return __send_request(SV_REG_FIFO, &reg, sizeof(reg));
 }
 
-void fsm_prcs_unreg(void)
+void proc_prcs_unreg(void)
 {
     prcs_reg reg;
     reg.cmd = PRCS_UNREG;
@@ -210,3 +246,84 @@ void fsm_prcs_unreg(void)
     (void)__send_request(SV_REG_FIFO, &reg, sizeof(reg));
 }
 
+int gen_real_timer(time_t sec, int isloop)
+{
+    int fd = timerfd_create(CLOCK_REALTIME, TFD_NONBLOCK);
+    if (-1 == fd){
+        perror("timerfd_create");
+        return -1;
+    }
+
+    struct itimerspec ts;
+
+    ts.it_value.tv_sec = sec;
+    ts.it_value.tv_nsec = 0L;
+    if (isloop){
+        ts.it_interval.tv_sec = sec;
+        ts.it_interval.tv_nsec = 0L;
+    }
+    else{
+        ts.it_interval.tv_sec = 0;
+        ts.it_interval.tv_nsec = 0;
+    }
+
+    if (timerfd_settime(fd, 0, &ts, NULL) == -1){
+        perror("timerfd_settime");
+        close(fd);
+        return -1;
+    }
+    
+    return fd;
+}
+
+int start_timer(fsm_t fsmid, time_t seconds)
+{
+    int tfd = gen_real_timer(seconds, NO_LOOP);
+    if (-1 == tfd){
+        perror("generate timer failed");
+        return -1;
+    }
+    
+    fsm_timer* ft = (fsm_timer*) malloc(sizeof(fsm_timer));
+    if (!ft){
+        perror("malloc failed");
+        close(tfd);
+        return -1;
+    }
+    
+    // insert into epoll and polling
+    struct epoll_event ev;
+    ev.events = EPOLLIN;
+    ev.data.fd = tfd;
+    if (epoll_ctl(g_client_epfd, EPOLL_CTL_ADD, tfd, &ev) == -1) goto RELEASE;
+    
+    // append this timer to timerlist so that we can find it while it is stopped
+    ft->timerfd = tfd;
+    ft->fsmid = fsmid;
+    if (NULL == listAddNodeTail(timer_list, ft)) goto RELEASE;
+
+    return 0;
+
+RELEASE:
+    close(tfd);
+    free(ft);
+    perror("start timer failed\n");
+    return -1;
+}
+
+void stop_timer(fsm_t fsmid)
+{
+    listNode* node;
+    listIter* iter = listGetIterator(timer_list, AL_START_HEAD);
+    while((node = listNext(iter)) != NULL){
+        fsm_timer* ft = (fsm_timer*) node->value;
+        if (!ft) continue;
+        if (fsmid == ft->fsmid){
+            // remove from epoll
+            (void)epoll_ctl(g_client_epfd, EPOLL_CTL_DEL, ft->timerfd, NULL);
+            // remove from timer_list
+            listDelNode(timer_list, node);
+            break;
+        }
+    }
+}

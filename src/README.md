@@ -31,6 +31,11 @@ FSM
 - s_mdl: 发送者的模块类型, 必须在fsm.h中定义.
 - r_mdl: 接受这的模块类型，必须在fsm.h中定义.
 
+5. timer
+----
+- 使用timerfd和epoll实现定时器
+
+
 
 约定
 ===

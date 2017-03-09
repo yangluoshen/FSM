@@ -34,7 +34,6 @@ typedef struct{
 
 /** client interface **/
 int fsm_send_msg(const char* fifo_name, const void* pmsg);
-int start_timer(fsm_t fsm_no, time_t seconds);
 
 enum SendMsgErrNo{
     SM_OK = 0,
