@@ -5,8 +5,12 @@
 #include <string.h>
 #include <unistd.h>
 
+#include "client_base.h"
+
+
+void process_yau_req(void* pmsg);
 void chat_yau_resp(pid_t r_pid, module_t r_mdl);
-int send_msg(void* m);
+
 
 void yau_chat(msg_t* data)
 {

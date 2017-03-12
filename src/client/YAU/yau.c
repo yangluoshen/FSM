@@ -1,4 +1,3 @@
-
 #include "fsm.h"
 #include "dvu_yau_msg.h"
 #include <unistd.h>

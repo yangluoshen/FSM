@@ -1,4 +1,3 @@
-
 #define _POSIX_C_SOURCE  199309L
 #include <sys/types.h>
 #include <sys/stat.h>
@@ -16,16 +15,8 @@
 #include "msg.h"
 #include "adlist.h"
 
-typedef struct {
-    int timerfd;
-    fsm_t fsmid;
+#include "client_base.h"
 
-}fsm_timer;
-
-enum TIMERTYPE{
-    NO_LOOP = 0,
-    LOOP = 1
-};
 
 static list* timer_list;
 
@@ -39,26 +30,11 @@ static int dummy_clfd;
 int proc_prcs_reg(module_t type);
 void proc_prcs_unreg(void);
 int __send_request(const char* name, const void* msg, size_t len);
-
 void custome_processing(int fd);
 
-typedef void (*drive_func)(void*);
-typedef struct{
-    module_t mdl;
-    drive_func func;
-
-}msg_driver_node;
-
-/** client must implement the following */
-const module_t ME_MDL = YAU;  /* the module type you want */
-//void process_dvu_req(void* pmsg);
-// define custome entry while msg comes 
-msg_driver_node g_msg_driver[] = 
-{
-    //{DVU, process_dvu_req}
-
-};
-#define DRIVER_SZ (sizeof(g_msg_driver)/sizeof(msg_driver_node))
+extern const module_t ME_MDL;
+extern const size_t FSM_DRIVER_SZ;
+extern const int FSM_CLIENT_EPOLL_TIMEOUT;
 
 
 void remove_cl_fifo()
@@ -163,6 +139,9 @@ int initialize()
     return 0;
 }
 
+#ifdef YAU_MDL
+void say_hello_to_dvu();
+#endif
 int main(int argc, char* argv[])
 {
     if (0 != initialize()){
@@ -175,7 +154,7 @@ int main(int argc, char* argv[])
 
     struct epoll_event ev_list[epoll_size];
     while (1){
-        int ready = epoll_wait(g_client_epfd, ev_list, epoll_size, -1);
+        int ready = epoll_wait(g_client_epfd, ev_list, epoll_size, FSM_CLIENT_EPOLL_TIMEOUT);
         if (-1 == ready){
             perror("epoll_wait");
             continue;
@@ -187,9 +166,11 @@ int main(int argc, char* argv[])
                 continue;
             }else if (ev_list[i].events & (EPOLLHUP | EPOLLERR)){
                 perror("read ev_list");
-                return -1;
-            }
+                return -1; }
         }
+#ifdef YAU_MDL
+        say_hello_to_dvu();
+#endif
     }
 
     return 0;
@@ -201,12 +182,14 @@ void custome_processing(int fd)
     module_t type = pmsg->s_mdl;
 
     int i;
-    for (i = 0; i < DRIVER_SZ; ++i){
-        if (type == g_msg_driver[i].mdl){
-            if (!g_msg_driver[i].func)
+    for (i = 0; i < FSM_DRIVER_SZ; ++i){
+        const msg_driver_node* node = get_driver_node(i);
+        if (!node) continue;
+        if (type == node->mdl){
+            if (!node->func)
                 continue;
 
-            g_msg_driver[i].func(pmsg);
+            node->func(pmsg);
             break;
         }
     }
@@ -314,7 +297,7 @@ void stop_timer(fsm_t fsmid)
 {
     listNode* node;
     listIter* iter = listGetIterator(timer_list, AL_START_HEAD);
-    while((node = listNext(iter)) != NULL){
+    while ((node = listNext(iter)) != NULL){
         fsm_timer* ft = (fsm_timer*) node->value;
         if (!ft) continue;
         if (fsmid == ft->fsmid){
@@ -325,4 +308,5 @@ void stop_timer(fsm_t fsmid)
             break;
         }
     }
+    free (iter);
 }
