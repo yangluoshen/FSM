@@ -6,7 +6,7 @@ FLAGS+= -ladlist
 
 all: server 
 
-server: server.c ../fsm.c
+server: server.c ../debug.c ../fsm.c
 	$(CC) -g $^  -o $@ -Wall -std=c99 -pedantic $(FLAGS)
 
 clean:

@@ -2,7 +2,6 @@
 #include <sys/stat.h>
 #include <fcntl.h>
 #include <errno.h>
-#include <assert.h>
 #include <signal.h>
 #include <malloc.h>
 #include <string.h>
@@ -11,17 +10,10 @@
 #include "adlist.h"
 #include "sds.h"
 
+#define CLOG_MAIN
+#include "debug.h"
+
 #include "server.h"
-
-
-#define CLOG_MAIN  /*clog essential */
-#include "clog.h"
-#define SV_LOGGER (0)
-
-#define LOG_D(fmt, ...) clog_debug(CLOG(SV_LOGGER), fmt, ##__VA_ARGS__); 
-#define LOG_ND(fmt) LOG_D(fmt, NULL); 
-#define LOG_E(fmt, ...) clog_error(CLOG(SV_LOGGER), fmt, ##__VA_ARGS__); 
-#define LOG_NE(fmt) LOG_E(fmt, NULL); 
 
 #define MAX_SV_EPOLL_NUM (2048)
 #define MAX_EVENTS (1024)
@@ -32,6 +24,7 @@
 static int sv_epfd;
 static int sv_reg_fd;
 static int dummy_reg_fd;
+const int G_LOGGER = 0;
 //static unsigned int max_conn_num = MAX_PROCESS_CONN_NUM;
 
 list* reg_list;
@@ -271,10 +264,10 @@ int init_log()
     char sv_log_file[32] = {0};
     snprintf(sv_log_file,32, "/tmp/fsm_sv_%d.log", getpid());
 
-    int r = clog_init_path(SV_LOGGER, sv_log_file);
+    int r = clog_init_path(G_LOGGER, sv_log_file);
     if (r != 0){
-        LOG_NE("init server log failed");
-        return 1;
+        perror("init server log failed");
+        return -1;
     }
     
     return 0;
