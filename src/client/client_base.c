@@ -2,7 +2,6 @@
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <fcntl.h>
-#include <assert.h>
 #include <signal.h>
 #include <malloc.h>
 #include <string.h>
@@ -17,8 +16,12 @@
 
 #include "client_base.h"
 
+#define CLOG_MAIN
+#include "debug.h"
+const int G_LOGGER = 0;
 
 static list* timer_list;
+list* g_fsm_driver;
 
 static char client_fifo [FIFO_NAME_LEN];
 const int epoll_size = 32;
@@ -130,11 +133,33 @@ int timer_init()
     return 0;
 }
 
+int fsm_driver_init()
+{
+    if ((g_fsm_driver = listCreate()) == NULL) return -1;
+    return 0;
+}
+
+int log_init()
+{
+    char client_log_file[32] = {0};
+    snprintf(client_log_file, 32, "/tmp/fsm_cl_M%luP%d.log", ME_MDL, getpid());
+
+    int r = clog_init_path(G_LOGGER, client_log_file);
+    if (-1 == r){
+        perror("init clog failed");
+        return -1;
+    }
+
+    return 0;
+}
+
 int initialize()
 {
     if (-1 == client_login()) return -1;
     if (-1 == epoll_init()) return -1;
     if (-1 == timer_init()) return -1;
+    if (-1 == log_init()) return -1;
+    if (-1 == fsm_driver_init()) return -1;
 
     return 0;
 }
@@ -168,6 +193,7 @@ int main(int argc, char* argv[])
                 perror("read ev_list");
                 return -1; }
         }
+// just for debug
 #ifdef YAU_MDL
         say_hello_to_dvu();
 #endif

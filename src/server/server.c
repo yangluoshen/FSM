@@ -25,7 +25,6 @@ static int sv_epfd;
 static int sv_reg_fd;
 static int dummy_reg_fd;
 const int G_LOGGER = 0;
-//static unsigned int max_conn_num = MAX_PROCESS_CONN_NUM;
 
 list* reg_list;
 
@@ -249,7 +248,7 @@ int check_process_conn()
                 process_unreg(&reg);
                 break;
             default:
-                LOG_E("Error: unknow process cmd[%c]\n", reg.cmd);
+                LOG_E("Error: unknow process cmd[%d]\n", reg.cmd);
                 break;
         }
     }

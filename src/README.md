@@ -23,6 +23,7 @@ FSM
   - 客户端只需要在模板上修改即可.
   - 使用者可以只专注与业务逻辑.
 
+
 4. msg_t
 ----
 - 消息头结构:用于路由
@@ -31,14 +32,22 @@ FSM
 - s_mdl: 发送者的模块类型, 必须在fsm.h中定义.
 - r_mdl: 接受这的模块类型，必须在fsm.h中定义.
 
+
 5. timer
 ----
 - 使用timerfd和epoll实现定时器
+
+
+6. debug
+-----
+- 相关文件debug.c debug.h clog.h
+- 说明：
+  - clog.h来自[mmueller/clog](https://github.com/mmueller/clog)
+  - Logger Handle must be named "G_LOGGER" while you use debug.h. Declear G_LOGGER(const int) once in before declear main function is pretty good.
+  - CLOG_MAIN is essential like G_LOGGER,too. CLOG_MAIN is a macro which should be define once before you include debug.h. This rule came from clog. clog.h will implement all the important log-function while you define CLOG_MAIN, so you shall define define CLOG_MAIN only once, or compiler will compain about redeclearation.
 
 
 
 约定
 ===
 - client 向其他进程(包括自己)通信时，必须自行组装fsm.h中定义的msg_t
-
-

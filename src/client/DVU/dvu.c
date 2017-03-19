@@ -1,11 +1,12 @@
 
-#include "fsm.h"
+#include "fsm_base.h"
 #include "dvu_yau_msg.h"
 #include <malloc.h>
 #include <string.h>
 #include <unistd.h>
 
 #include "client_base.h"
+#include "debug.h"
 
 
 void process_yau_req(void* pmsg);
@@ -15,6 +16,7 @@ void chat_yau_resp(pid_t r_pid, module_t r_mdl);
 void yau_chat(msg_t* data)
 {
     printf("yau:%s\n", ((req_t*)(data->data))->what);
+    LOG_D("yau say hello to me:%s", ((req_t*)(data->data))->what);
     chat_yau_resp(data->s_pid, data->s_mdl);
 }
 
@@ -56,5 +58,6 @@ void chat_yau_resp(pid_t r_pid, module_t r_mdl)
         perror("send msg failed");
         return ;
     }
+    LOG_ND("say hello to yau");
 }
 

@@ -2,7 +2,7 @@
 #ifndef __SERVER_H
 #define __SERVER_H
 
-#include "fsm.h"
+#include "fsm_base.h"
 #include <stdio.h>
 #include <unistd.h>
 

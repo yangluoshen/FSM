@@ -1,5 +1,5 @@
-#ifndef __FSM_H
-#define __FSM_H
+#ifndef __FSM_BASE_H
+#define __FSM_BASE_H
 
 #include <stdio.h>
 //#include <unistd.h>
@@ -9,7 +9,7 @@ typedef void* data_t;
 typedef size_t msg_type_t;
 typedef ssize_t error_t;
 typedef size_t module_t;
-typedef size_t fsm_t;
+typedef unsigned short fsm_t;
 
 #define PRCS_INFO \
 
@@ -81,4 +81,4 @@ typedef struct{
         snprintf(buf, FIFO_NAME_LEN, CL_FIFO_TPL, pid);\
     while(0)
 
-#endif  /*__FSM_H*/
+#endif  /*__FSM_BASE_H*/

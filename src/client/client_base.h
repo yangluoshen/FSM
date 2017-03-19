@@ -1,6 +1,6 @@
 #ifndef __CLIENT_BASE_H
 #define __CLIENT_BASE_H
-#include "fsm.h"
+#include "fsm_base.h"
 
 typedef void (*drive_func)(void*);
 
