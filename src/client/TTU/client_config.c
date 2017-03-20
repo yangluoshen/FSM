@@ -1,6 +1,6 @@
 #include "client_base.h"
 
-const module_t ME_MDL = DVU;  /* the module type you want */
+const module_t ME_MDL = TTU;  /* the module type you want */
 
 void process_yau_req(void* pmsg);
 

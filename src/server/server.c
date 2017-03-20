@@ -111,6 +111,7 @@ int send_client_msg(char* pmsg)
 int prcs_reg_info_init()
 {
     if ((reg_list = listCreate()) == NULL) return -1;
+    reg_list->free = free;
 
     sv_reg_fd = gen_fifo(SV_REG_FIFO, O_RDONLY|O_NONBLOCK);
     assert(-1 != sv_reg_fd);

@@ -130,12 +130,14 @@ int epoll_init()
 int timer_init()
 {
     if ((timer_list = listCreate()) == NULL) return -1;
+    timer_list->free = free;
     return 0;
 }
 
 int fsm_driver_init()
 {
     if ((g_fsm_driver = listCreate()) == NULL) return -1;
+    g_fsm_driver->free;
     return 0;
 }
 
@@ -165,7 +167,7 @@ int initialize()
 }
 
 #ifdef YAU_MDL
-void say_hello_to_dvu();
+void say_hello_to_ttu();
 #endif
 int main(int argc, char* argv[])
 {
@@ -195,7 +197,7 @@ int main(int argc, char* argv[])
         }
 // just for debug
 #ifdef YAU_MDL
-        say_hello_to_dvu();
+        say_hello_to_ttu();
 #endif
     }
 
@@ -310,7 +312,7 @@ int start_timer(fsm_t fsmid, time_t seconds)
     ft->fsmid = fsmid;
     if (NULL == listAddNodeTail(timer_list, ft)) goto RELEASE;
 
-    return 0;
+    return tfd;
 
 RELEASE:
     close(tfd);
@@ -319,14 +321,14 @@ RELEASE:
     return -1;
 }
 
-void stop_timer(fsm_t fsmid)
+void stop_timer(int timerfd)
 {
     listNode* node;
     listIter* iter = listGetIterator(timer_list, AL_START_HEAD);
     while ((node = listNext(iter)) != NULL){
         fsm_timer* ft = (fsm_timer*) node->value;
         if (!ft) continue;
-        if (fsmid == ft->fsmid){
+        if (timerfd == ft->timerfd){
             // remove from epoll
             (void)epoll_ctl(g_client_epfd, EPOLL_CTL_DEL, ft->timerfd, NULL);
             // remove from timer_list
@@ -334,5 +336,6 @@ void stop_timer(fsm_t fsmid)
             break;
         }
     }
+
     free (iter);
 }

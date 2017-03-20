@@ -13,8 +13,8 @@ typedef struct{
 #define RESP_LEN (MSG_HEAD_LEN + sizeof(resp_t))
 
 enum MSG_TYPE{
-    DVU_YAU_CHAT_REQ = 0,
-    YAU_DVU_CHAT_REQ,
+    TTU_YAU_CHAT_REQ = 0,
+    YAU_TTU_CHAT_REQ,
 
     MSG_TYPE_BUTT
 };

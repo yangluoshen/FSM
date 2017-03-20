@@ -1,7 +1,7 @@
 #include "client_config.h"
 #include "client_base.h"
 
-const module_t ME_MDL = DVU;  /* the module type you want */
+const module_t ME_MDL = TTU;  /* the module type you want */
 
 void process_yau_req(void* pmsg);
 
@@ -14,7 +14,7 @@ const size_t FSM_DRIVER_SZ = sizeof(g_msg_driver)/sizeof(msg_driver_node);
 
 fsm_reg g_fsm_reg_table[] = 
 {
-    {YAU_DVU_CHAT_REQ, NULL, NULL}
+    {YAU_TTU_CHAT_REQ, NULL, NULL}
 
 };
 

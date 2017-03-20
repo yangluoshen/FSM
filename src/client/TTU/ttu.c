@@ -1,6 +1,6 @@
 
 #include "fsm_base.h"
-#include "dvu_yau_msg.h"
+#include "ttu_yau_msg.h"
 #include <malloc.h>
 #include <string.h>
 #include <unistd.h>
@@ -26,7 +26,7 @@ void process_yau_req(void* data)
     msg_t* pmsg = (msg_t*) data;
     req_t* preq = (req_t*) pmsg->data;
     switch(preq->msg_type){
-        case YAU_DVU_CHAT_REQ: 
+        case YAU_TTU_CHAT_REQ: 
             yau_chat(pmsg);
             break;
         default:
@@ -46,12 +46,12 @@ void chat_yau_resp(pid_t r_pid, module_t r_mdl)
     msg_t* pmsg = (msg_t*) req_buf;
     pmsg->s_pid = getpid();
     pmsg->r_pid = r_pid;
-    pmsg->s_mdl = DVU;
+    pmsg->s_mdl = TTU;
     pmsg->r_mdl = r_mdl;
     pmsg->data_len = data_len;
 
     req_t* preq = (req_t*) pmsg->data;
-    preq->msg_type = DVU_YAU_CHAT_REQ;
+    preq->msg_type = TTU_YAU_CHAT_REQ;
     memcpy(preq->what, content, sizeof(content));
 
     if (SM_OK != send_msg(pmsg)){

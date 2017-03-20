@@ -3,10 +3,10 @@
 const module_t ME_MDL = YAU;  /* the module type you want */
 
 
-void process_dvu_req(void* pmsg);
+void process_ttu_req(void* pmsg);
 msg_driver_node g_msg_driver[] = 
 {
-    {DVU, process_dvu_req}
+    {TTU, process_ttu_req}
 
 };
 const size_t FSM_DRIVER_SZ = sizeof(g_msg_driver)/sizeof(msg_driver_node);

@@ -1,5 +1,5 @@
 #include "fsm_base.h"
-#include "dvu_yau_msg.h"
+#include "ttu_yau_msg.h"
 #include <unistd.h>
 #include <string.h>
 #include <malloc.h>
@@ -21,17 +21,17 @@ void* pack_msg()
     pmsg->s_pid = getpid();
     pmsg->r_pid = -1;
     pmsg->s_mdl = YAU;
-    pmsg->r_mdl = DVU;
+    pmsg->r_mdl = TTU;
     pmsg->data_len = data_len;
     
     req_t* preq = (req_t*)pmsg->data;
-    preq->msg_type = YAU_DVU_CHAT_REQ;
+    preq->msg_type = YAU_TTU_CHAT_REQ;
     memcpy(preq->what, content, strlen(content) + 1);
     
     return req_buf;
 }
 
-void say_hello_to_dvu()
+void say_hello_to_ttu()
 {
     void * pmsg = pack_msg();
     if(SM_OK != send_msg(pmsg)){
@@ -40,21 +40,21 @@ void say_hello_to_dvu()
 }
 
 
-void dvu_chat(msg_t* data)
+void ttu_chat(msg_t* data)
 {
-    printf("dvu:%s\n", ((req_t*)(data->data))->what);
+    printf("ttu:%s\n", ((req_t*)(data->data))->what);
     //chat_yau_resp(data->s_pid, data->s_mdl);
     exit(1);
 }
 
-void process_dvu_req(void* data)
+void process_ttu_req(void* data)
 {
     if (!data) return;
     msg_t* pmsg = (msg_t*) data;
     req_t* preq = (req_t*) pmsg->data;
     switch(preq->msg_type){
-        case DVU_YAU_CHAT_REQ: 
-            dvu_chat(pmsg);
+        case TTU_YAU_CHAT_REQ: 
+            ttu_chat(pmsg);
             break;
         default:
             puts("unknown msg type");

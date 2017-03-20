@@ -46,6 +46,11 @@ FSM
   - Logger Handle must be named "G_LOGGER" while you use debug.h. Declear G_LOGGER(const int) once in before declear main function is pretty good.
   - CLOG_MAIN is essential like G_LOGGER,too. CLOG_MAIN is a macro which should be define once before you include debug.h. This rule came from clog. clog.h will implement all the important log-function while you define CLOG_MAIN, so you shall define define CLOG_MAIN only once, or compiler will compain about redeclearation.
 
+7. C 实现继承和多态
+------
+- fsm_entity_base 作为所有fsm的基础(基类)
+
+
 
 
 约定

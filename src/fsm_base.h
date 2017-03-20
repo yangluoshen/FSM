@@ -49,7 +49,7 @@ enum PRCS_CMD{
 
 /*each Uint(module) may indicate a client(or a micro serve)*/
 enum E_MODULE_TYPE{
-	DVU = 0,
+	TTU = 0,
 	YAU,
 	BYU,
 
