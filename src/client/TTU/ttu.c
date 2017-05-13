@@ -1,4 +1,3 @@
-
 #include "fsm_base.h"
 #include "ttu_yau_msg.h"
 #include <malloc.h>
@@ -8,16 +7,53 @@
 #include "client_base.h"
 #include "debug.h"
 
+#include "fsm.h"
+#include "cachefsm.h"
+
 
 void process_yau_req(void* pmsg);
-void chat_yau_resp(pid_t r_pid, module_t r_mdl);
 
 
 void yau_chat(msg_t* data)
 {
     printf("yau:%s\n", ((req_t*)(data->data))->what);
     LOG_D("yau say hello to me:%s", ((req_t*)(data->data))->what);
-    chat_yau_resp(data->s_pid, data->s_mdl);
+
+    fsm_table_unit* cache_unit = fsm_factory(CACHE_REQ, data);
+    if (!cache_unit){
+        LOG_NE("fsm_factory failed");
+        return;
+    }
+
+    cache_fsm* entity = (cache_fsm*)(entity);
+    if (!entity) goto FREE_TABLE_UNIT;
+    
+    if (!entity->nextjump){
+        LOG_NE("there is no nextjump");
+
+        goto FINISH_FSM;
+    }
+    
+    int ret = (entity->nextjump)(entity, data);
+    if (FSM_OK != ret){
+        LOG_NE("proc nextjump failed");
+        if (entity->exception)
+            entity->exception(entity);
+    }
+
+    if (entity->is_fsm_finish){
+        LOG_ND("fsm is finish");
+        goto FINISH_FSM;
+    }
+
+    LOG_ND("Exit.");
+    return;
+
+FINISH_FSM:
+    entity->destructor(entity);
+FREE_TABEL_UNIT:
+    fsm_table_unit_destroy(cache_unit);
+    return;
 }
 
 void process_yau_req(void* data)
@@ -35,29 +71,4 @@ void process_yau_req(void* data)
     }
 }
 
-void chat_yau_resp(pid_t r_pid, module_t r_mdl)
-{
-    char content[] = "Nice to see you, too.";
-    size_t data_len = sizeof(msg_type_t) + sizeof(content);
-    size_t msg_len = MSG_HEAD_LEN + data_len;
-    char* req_buf = (char*) malloc(msg_len);
-    if (!req_buf) return ;
-
-    msg_t* pmsg = (msg_t*) req_buf;
-    pmsg->s_pid = getpid();
-    pmsg->r_pid = r_pid;
-    pmsg->s_mdl = TTU;
-    pmsg->r_mdl = r_mdl;
-    pmsg->data_len = data_len;
-
-    req_t* preq = (req_t*) pmsg->data;
-    preq->msg_type = TTU_YAU_CHAT_REQ;
-    memcpy(preq->what, content, sizeof(content));
-
-    if (SM_OK != send_msg(pmsg)){
-        perror("send msg failed");
-        return ;
-    }
-    LOG_ND("say hello to yau");
-}
 

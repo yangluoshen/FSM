@@ -16,5 +16,8 @@ enum MSG_TYPE{
     TTU_YAU_CHAT_REQ = 0,
     YAU_TTU_CHAT_REQ,
 
+    CACHE_REQ,
+    CACHE_RESP,
+
     MSG_TYPE_BUTT
 };

@@ -1,3 +1,3 @@
 # FSM
 Finite State Machine generator. 
-something like DFA.
+FSM is aimed to generate a DFA(Deterministic Finite Automaton) easily.

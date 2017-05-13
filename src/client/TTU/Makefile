@@ -5,8 +5,10 @@ FLAGS+= -L$(ROOT_DIR)/deps/adlist/
 FLAGS+= -ladlist
 FLAGS+= -DTTU_MDL
 
+BASE_SRC= $(ROOT_DIR)/src/fsm_base.c $(ROOT_DIR)/src/client/fsm.c  $(ROOT_DIR)/src/client/client_base.c 
 SRC=
-SRC+= client_config.c $(ROOT_DIR)/src/debug.c $(ROOT_DIR)/src/fsm_base.c $(ROOT_DIR)/src/client/client_base.c ttu.c
+SRC+= $(BASE_SRC) client_config.c $(ROOT_DIR)/src/debug.c $(ROOT_DIR)/src/client/cachefsm.c  ttu.c
+
 
 ttu: $(SRC)
 	$(CC) -g $^  -o $@ -Wall -std=c99 -pedantic $(FLAGS)

@@ -5,10 +5,11 @@
 #include "adlist.h"
 
 #define MAX_ENTITY_TIMER_NUM (20)
-typedef void (*fsm_constructor)(void* entity, fsm_t fsmid);
-typedef void (*fsm_destructor)(void* entity);
-typedef int (*fsm_nextjump_func)(void* entity, void* msg);
-typedef void (*fsm_exception)(void* entity);
+typedef void  (*fsm_constructor)(void* entity, fsm_t fsmid);
+typedef void  (*fsm_destructor)(void* entity);
+typedef int   (*fsm_nextjump_func)(void* entity, void* msg);
+typedef void  (*fsm_exception)(void* entity);
+typedef void* (*fsm_creator)(void);
 
 #define FSM_ENTITY_BASE \
     fsm_constructor constructor;\
@@ -20,7 +21,7 @@ typedef void (*fsm_exception)(void* entity);
     char is_fsm_finish;
 
 typedef struct __tag_fsm_entity_base{
-    FSM_ENTITY_BASE;
+    FSM_ENTITY_BASE
 }fsm_entity_base;
 
 /* A fsm entity will be created 
@@ -29,25 +30,38 @@ typedef struct __tag_fsm_entity_base{
  * process start
  */
 typedef struct __tag_fsm_regist_info{
-    msg_t type;
+    int type;
     fsm_constructor constructor;
-    fsm_destructor  destructor;
+    fsm_creator creator;
+    //fsm_destructor  destructor;
 }fsm_reg;
 
 /* Tell procedure what next jump is.
  * The fsm driver table should be global.
  */
-struct __tag_fsm_drive_table_unit{
+typedef struct __tag_fsm_drive_table_unit{
     fsm_t fsmid;
     fsm_nextjump_func nextjump;
     void* entity;
-}fsm_table_uint;
+}fsm_table_unit;
+
+
+fsm_table_unit* fsm_factory(int type, void* msg);
+void fsm_table_unit_destroy(fsm_table_unit* unit);
+void fsm_entity_base_constructor(void* entity, fsm_t fsmid);
+void fsm_entity_base_destructor(void* entity);
+void fsm_set_fsm_finish(void* entity);
 
 
 #define MIN_COMMON_FSMID (50)
 enum {
     FSMID_IDLE = 0,
-    FMSID_ENGAGED = 1
+    FSMID_ENGAGED = 1
+};
+
+enum FSM_RETCODE{
+    FSM_OK = 0,
+    FSM_FAIL
 };
 
 #define CVTTO_BASE(base, entity)\

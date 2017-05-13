@@ -1,4 +1,6 @@
+#include "client_config.h"
 #include "client_base.h"
+#include "cachefsm.h"
 
 const module_t ME_MDL = TTU;  /* the module type you want */
 
@@ -11,14 +13,12 @@ msg_driver_node g_msg_driver[] =
 };
 const size_t FSM_DRIVER_SZ = sizeof(g_msg_driver)/sizeof(msg_driver_node);
 
-enum ENUM_FSM_EPOL_TIMEOUT{
-    FSM_EPOLL_BLOCK = -1,
-    FSM_EPOLL_NONBLOCK = 0,
-    FSM_EPOLL_WAIT_SECONDS = 2 * 1000 /* 2 seconds poling */
-    /* any new define below please*/
-    
-};
 
+fsm_reg g_fsm_reg_table[] = 
+{
+    {CACHE_REQ, cache_fsm_constructor, cache_fsm_create}
+
+};
 /*FSM_EPOLL_BLOCK by default */
 const int FSM_CLIENT_EPOLL_TIMEOUT = FSM_EPOLL_BLOCK;
 
@@ -34,4 +34,16 @@ const msg_driver_node* get_driver_node(size_t index)
 
     return NULL;
 }
+
+fsm_reg* get_reginfo_by_msgtype(int type)
+{
+    int i;
+    size_t s = sizeof(g_fsm_reg_table)/sizeof(fsm_reg);
+    for (i = 0; i < s; ++i){
+        if (type == g_fsm_reg_table[i].type)
+            return & g_fsm_reg_table[i];
+    } 
+    return NULL;
+}
+
 

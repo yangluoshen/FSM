@@ -1,5 +1,8 @@
 #include "fsm.h"
+#include <malloc.h>
 #include <limits.h>
+
+#include "client_base.h"
 
 /***** fsm id management *****/
 
@@ -40,13 +43,13 @@ void free_fsm_id(fsm_t fsmid)
 
 /***** fsm factory *****/
 
-/* @Description: Generator a fsm entity according to 'type'
+/* @Description: Generate a fsm entity according to 'type'
  */
-fsm_table_unit* fsm_factory(msg_t type, void* msg)
+fsm_reg* get_reginfo_by_msgtype(int type);
+fsm_table_unit* fsm_factory(int type, void* msg)
 {
     fsm_t fsmid;
-    int i;
-    fsm_reg reg_info = get_reginfo_by_msgtype(type);
+    fsm_reg* reg_info = get_reginfo_by_msgtype(type);
     if (!reg_info) goto FAILED;
 
     fsm_constructor constructor = reg_info->constructor;
@@ -55,10 +58,16 @@ fsm_table_unit* fsm_factory(msg_t type, void* msg)
     fsmid = alloc_fsm_id();
     if (-1 == fsmid) goto FAILED;
 
+    fsm_creator creator = reg_info->creator;
+    if (!creator) goto FAILED;
+
+    void* entity = reg_info->creator();
+    if (!entity) goto FAILED;
+
     fsm_table_unit* unit = (fsm_table_unit*)malloc(sizeof(fsm_table_unit));
     if (!unit) goto RELEASE;
 
-    void* entity = constructor(msg);
+    constructor(entity, fsmid);
     if (!entity) goto FREE;
 
     unit->fsmid = fsmid;
@@ -70,6 +79,7 @@ fsm_table_unit* fsm_factory(msg_t type, void* msg)
 FREE:
     free(unit);
 RELEASE:
+    free(entity);
     free_fsm_id(fsmid);
 FAILED:
     return NULL;
@@ -91,8 +101,12 @@ void fsm_table_unit_destroy(fsm_table_unit* unit)
  */
 
 /* @Decription : A base constructor. 
- *     Do the things that fsm entity should essential.
+ *     Do the things all fsm entities should do.
  */
+void fsm_entity_base_destructor(void* entity);
+void fsm_entity_timer_init(void* entity);
+
+
 void fsm_entity_base_constructor(void* entity, fsm_t fsmid)
 {
     if (!entity) return;
@@ -100,9 +114,9 @@ void fsm_entity_base_constructor(void* entity, fsm_t fsmid)
     base_entity->fsmid = fsmid;
     base_entity->is_fsm_finish = 0;
     base_entity->nextjump = NULL;
-    bese_entity->fsm_entity_base_destructor;
+    base_entity->destructor = fsm_entity_base_destructor;
 
-    fsm_entity_timer_init();
+    fsm_entity_timer_init(entity);
 }
 
 void fsm_entity_timer_init(void* entity)
@@ -110,7 +124,7 @@ void fsm_entity_timer_init(void* entity)
     if (!entity) return;
     CVTTO_BASE(be, entity);
     int i;
-    for (i = 0; i < MAX_ENTIRY_TIMER_NUM; ++i)
+    for (i = 0; i < MAX_ENTITY_TIMER_NUM; ++i)
         be->timer_list[i] = 0;
 }
 
@@ -134,7 +148,6 @@ void fsm_entity_base_destructor(void* entity)
 {
     if (!entity) return ;
     CVTTO_BASE(be, entity);
-
     
     free_fsm_id(be->fsmid);
     
@@ -186,6 +199,13 @@ void fsm_entity_base_exception(void* entity)
     CVTTO_BASE(be, entity);
 
     be->is_fsm_finish = 1;
+}
+
+void fsm_set_fsm_finish(void* entity)
+{
+    if (!entity) return;
+    CVTTO_BASE(base, entity);
+    base->is_fsm_finish = 1;
 }
 
 

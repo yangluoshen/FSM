@@ -137,7 +137,7 @@ int timer_init()
 int fsm_driver_init()
 {
     if ((g_fsm_driver = listCreate()) == NULL) return -1;
-    g_fsm_driver->free;
+    g_fsm_driver->free = free;
     return 0;
 }
 

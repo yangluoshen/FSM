@@ -26,6 +26,6 @@ const msg_driver_node* get_driver_node(size_t index);
 
 int send_msg(void* m);
 int start_timer(fsm_t fsmid, time_t seconds);
-void stop_timer(fsm_t fsmid);
+void stop_timer(int timerfd);
 
 #endif 
