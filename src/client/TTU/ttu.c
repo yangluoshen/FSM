@@ -25,9 +25,11 @@ void yau_chat(msg_t* data)
         return;
     }
 
-    cache_fsm* entity = (cache_fsm*)(entity);
+    cache_fsm* entity = (cache_fsm*)(cache_unit->entity);
     if (!entity) goto FREE_TABLE_UNIT;
     
+    fsm_destructor destructor = entity->destructor;
+
     if (!entity->nextjump){
         LOG_NE("there is no nextjump");
 
@@ -50,8 +52,14 @@ void yau_chat(msg_t* data)
     return;
 
 FINISH_FSM:
-    entity->destructor(entity);
-FREE_TABEL_UNIT:
+    if (destructor)
+        entity->destructor(entity);
+    else{
+        free(entity);
+        entity = NULL;
+    }
+
+FREE_TABLE_UNIT:
     fsm_table_unit_destroy(cache_unit);
     return;
 }

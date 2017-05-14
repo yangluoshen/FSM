@@ -4,6 +4,7 @@
 #include "debug.h"
 #include "ttu_yau_msg.h"
 #include "client_base.h"
+#include <malloc.h>
 
 void chat_yau_resp(pid_t r_pid, module_t r_mdl);
 
@@ -13,7 +14,10 @@ void cache_fsm_exception(void* entity);
 
 void cache_fsm_constructor(void* entity, fsm_t fsmid)
 {
-    if (!entity) return;
+    if (!entity) {
+        LOG_NE("constructor falied, entity is NULL");
+        return;
+    }
 
     fsm_entity_base_constructor(entity, fsmid);
 

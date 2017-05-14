@@ -72,7 +72,7 @@ fsm_table_unit* fsm_factory(int type, void* msg)
 
     unit->fsmid = fsmid;
     unit->entity = entity;
-    unit->nextjump = NULL; //essential
+    //unit->nextjump = NULL; //essential
 
     return unit;
 
