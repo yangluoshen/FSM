@@ -11,13 +11,12 @@ typedef ssize_t error_t;
 typedef size_t module_t;
 typedef unsigned short fsm_t;
 
-#define PRCS_INFO \
 
 #define MSG_HEAD \
     pid_t s_pid;     /*sender pid*/\
     pid_t r_pid;     /*receiver pid*/\
     module_t s_mdl;  /*sender module type*/\
-    module_t r_mdl;  /*sender module type*/\
+    module_t r_mdl;  /*receiver module type*/\
     size_t data_len;
 
 

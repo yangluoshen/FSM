@@ -10,10 +10,12 @@ typedef void  (*fsm_destructor)(void* entity);
 typedef int   (*fsm_nextjump_func)(void* entity, void* msg);
 typedef void  (*fsm_exception)(void* entity);
 typedef void* (*fsm_creator)(void);
+typedef void  (*fsm_event)(void* entity, void* msg);
 
 #define FSM_ENTITY_BASE \
     fsm_constructor constructor;\
     fsm_destructor destructor;\
+    fsm_event event;\
     fsm_nextjump_func nextjump;\
     fsm_exception exception;\
     fsm_t fsmid;\
@@ -54,6 +56,8 @@ void fsm_set_fsm_finish(void* entity);
 
 
 #define MIN_COMMON_FSMID (50)
+#define FSM_HASH_NUM (110)
+
 enum {
     FSMID_IDLE = 0,
     FSMID_ENGAGED = 1

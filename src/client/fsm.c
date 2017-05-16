@@ -3,12 +3,15 @@
 #include <limits.h>
 
 #include "client_base.h"
+#include "fdict.h"
 
 /***** fsm id management *****/
 
 // 0 means idle, 1 means engaged
 static unsigned char fsm_id_pool[SHRT_MAX] = {0};
 static fsm_t fsm_id_ptr = MIN_COMMON_FSMID;
+
+static fdict* fsm_entity_pool = NULL;
 
 /* return: 1 means a reserved fsm id
  *         0 means a common fsm id
@@ -40,8 +43,30 @@ void free_fsm_id(fsm_t fsmid)
     fsm_id_pool[fsmid] = FSMID_IDLE;
 }
 
+/***********fsm entity pool ***************/
 
-/***** fsm factory *****/
+int fsm_hash_match(void* entity, fdict_key_t key)
+{
+    if (!entity || !key) return 0;
+    
+    CVTTO_BASE(fsm, entity);
+    return fsm->fsmid == *(fsm_t*)key;
+}
+
+size_t fsm_hash_calc(fdict* d, fdict_key_t key)
+{
+    if (!d || !key) return -1; 
+
+    fsm_t hash = (*(fsm_t*)key) % d->hash_size;
+    return (size_t) hash;
+}
+
+void* get_fsm_entity(fsm_t fsmid)
+{
+    return fdict_find(fsm_entity_pool, &fsmid);
+} 
+
+/**************** fsm factory ***************/
 
 /* @Description: Generate a fsm entity according to 'type'
  */
@@ -72,7 +97,13 @@ fsm_table_unit* fsm_factory(int type, void* msg)
 
     unit->fsmid = fsmid;
     unit->entity = entity;
-    //unit->nextjump = NULL; //essential
+
+    // insert into fsm_entity_pool
+    if (!fsm_entity_pool){
+        fsm_entity_pool = fdict_create(FSM_HASH_NUM, fsm_hash_match, fsm_hash_calc); 
+        if (!fsm_entity_pool) goto FREE;
+    }
+    fdict_insert(fsm_entity_pool, &fsmid, entity);
 
     return unit;
 
@@ -113,10 +144,15 @@ void fsm_entity_base_constructor(void* entity, fsm_t fsmid)
     CVTTO_BASE(base_entity, entity);
     base_entity->fsmid = fsmid;
     base_entity->is_fsm_finish = 0;
+    base_entity->event = NULL;
     base_entity->nextjump = NULL;
     base_entity->destructor = fsm_entity_base_destructor;
 
     fsm_entity_timer_init(entity);
+}
+
+void fsm_base_event(void* entity, void* msg)
+{
 }
 
 void fsm_entity_timer_init(void* entity)

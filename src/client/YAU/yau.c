@@ -25,7 +25,7 @@ void* pack_msg()
     pmsg->data_len = data_len;
     
     req_t* preq = (req_t*)pmsg->data;
-    preq->msg_type = YAU_TTU_CHAT_REQ;
+    preq->msg_type = CACHE_REQ;
     memcpy(preq->what, content, strlen(content) + 1);
     
     return req_buf;
