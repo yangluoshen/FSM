@@ -21,15 +21,20 @@ void yau_chat(msg_t* data)
     printf("yau:%s\n", preq->what);
     LOG_D("yau say hello to me:%s, msg_type[%u]", preq->what, preq->msg_type);
 
-    fsm_table_unit* unit = fsm_factory(preq->msg_type, data);
-    if (!unit){
+    fsm_entity_base* entity = fsm_factory(preq->msg_type, data);
+    if (!entity){
         LOG_NE("fsm_factory failed");
         return;
     }
 
-    CVTTO_BASE(base, unit->entity);
-    base->event(base, data);
+    entity->event(entity, data);
 
+    if (entity->is_fsm_finish){
+        LOG_D("fsm[%u] finish", entity->fsmid);
+        if (entity->destructor) entity->destructor(entity);
+
+        rmv_fsm_entity(entity->fsmid);
+    }
 
     LOG_ND("Exit.");
     return;

@@ -53,10 +53,6 @@ void cache_event(void* entity, void* msg)
             cache_en->exception(entity);
     }
 
-    if (cache_en->is_fsm_finish && cache_en->destructor){
-        LOG_D("fsm[%u] finish", cache_en->fsmid);
-        cache_en->destructor(entity);
-    }
 
     return;
 }

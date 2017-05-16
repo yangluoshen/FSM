@@ -4,6 +4,7 @@
 
 #include "client_base.h"
 #include "fdict.h"
+#include "debug.h"
 
 /***** fsm id management *****/
 
@@ -66,67 +67,57 @@ void* get_fsm_entity(fsm_t fsmid)
     return fdict_find(fsm_entity_pool, &fsmid);
 } 
 
+void rmv_fsm_entity(fsm_t fsmid)
+{
+    LOG_D("remove fsm entity[%u]", fsmid);
+    fdict_remove(fsm_entity_pool, &fsmid);
+}
+
 /**************** fsm factory ***************/
 
 /* @Description: Generate a fsm entity according to 'type'
  */
 fsm_reg* get_reginfo_by_msgtype(int type);
-fsm_table_unit* fsm_factory(int type, void* msg)
+
+fsm_entity_base* fsm_factory(int type, void* msg)
 {
-    fsm_t fsmid;
     fsm_reg* reg_info = get_reginfo_by_msgtype(type);
-    if (!reg_info) goto FAILED;
+    if (!reg_info) return NULL;
 
     fsm_constructor constructor = reg_info->constructor;
-    if (!constructor) goto FAILED;
-
-    fsmid = alloc_fsm_id();
-    if (-1 == fsmid) goto FAILED;
+    if (!constructor) return NULL;
 
     fsm_creator creator = reg_info->creator;
-    if (!creator) goto FAILED;
+    if (!creator) return NULL;
 
-    void* entity = reg_info->creator();
-    if (!entity) goto FAILED;
+    fsm_entity_base* entity = (fsm_entity_base*)reg_info->creator();
+    if (!entity) return NULL;
 
-    fsm_table_unit* unit = (fsm_table_unit*)malloc(sizeof(fsm_table_unit));
-    if (!unit) goto RELEASE;
+    fsm_t fsmid = alloc_fsm_id();
+    if (-1 == fsmid) goto RELEASE;
 
     constructor(entity, fsmid);
-    if (!entity) goto FREE;
-
-    unit->fsmid = fsmid;
-    unit->entity = entity;
+    if (!entity) goto FAILED;
 
     // insert into fsm_entity_pool
     if (!fsm_entity_pool){
         fsm_entity_pool = fdict_create(FSM_HASH_NUM, fsm_hash_match, fsm_hash_calc); 
-        if (!fsm_entity_pool) goto FREE;
+        if (!fsm_entity_pool) goto FAILED;
     }
     fdict_insert(fsm_entity_pool, &fsmid, entity);
 
-    return unit;
+    return entity;
 
-FREE:
-    free(unit);
+FAILED:
+    free_fsm_id(fsmid);
 RELEASE:
     free(entity);
-    free_fsm_id(fsmid);
-FAILED:
+    entity = NULL;
     return NULL;
-
-}
-
-void fsm_table_unit_destroy(fsm_table_unit* unit)
-{
-    if(!unit) return ;
-    free_fsm_id(unit->fsmid);
-    //unit->entity->destructor();  //how to destroy entity?
-    free (unit);
 }
 
 
-/***** fsm entity base functions *****/
+/************ fsm entity base functions *****/
 /* @Description: Implement fsm_entity base,
  *               which like Object-Oriented.
  */
@@ -136,7 +127,6 @@ void fsm_table_unit_destroy(fsm_table_unit* unit)
  */
 void fsm_entity_base_destructor(void* entity);
 void fsm_entity_timer_init(void* entity);
-
 
 void fsm_entity_base_constructor(void* entity, fsm_t fsmid)
 {

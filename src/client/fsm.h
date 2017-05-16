@@ -38,21 +38,13 @@ typedef struct __tag_fsm_regist_info{
     //fsm_destructor  destructor;
 }fsm_reg;
 
-/* Tell procedure what next jump is.
- * The fsm driver table should be global.
- */
-typedef struct __tag_fsm_drive_table_unit{
-    fsm_t fsmid;
-    fsm_nextjump_func nextjump;
-    void* entity;
-}fsm_table_unit;
 
-
-fsm_table_unit* fsm_factory(int type, void* msg);
-void fsm_table_unit_destroy(fsm_table_unit* unit);
+fsm_entity_base* fsm_factory(int type, void* msg);
 void fsm_entity_base_constructor(void* entity, fsm_t fsmid);
 void fsm_entity_base_destructor(void* entity);
 void fsm_set_fsm_finish(void* entity);
+void rmv_fsm_entity(fsm_t fsmid);
+void* get_fsm_entity(fsm_t fsmid);
 
 
 #define MIN_COMMON_FSMID (50)
