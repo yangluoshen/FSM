@@ -84,7 +84,7 @@
 #define CLOG_DATETIME_LENGTH 256
 
 /* Default format strings. */
-#define CLOG_DEFAULT_FORMAT "%d %t %f(%n): %l: %m\n"
+#define CLOG_DEFAULT_FORMAT "%d %t [%l]%m[%f(%n)]\n"
 #define CLOG_DEFAULT_DATE_FORMAT "%Y-%m-%d"
 #define CLOG_DEFAULT_TIME_FORMAT "%H:%M:%S"
 

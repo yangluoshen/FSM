@@ -6,10 +6,14 @@
 #include "client_base.h"
 #include <malloc.h>
 
-void chat_yau_resp(pid_t r_pid, module_t r_mdl);
+extern module_t ME_MDL;
+
+void chat_yau_resp(cache_fsm* entity, fsm_t peer_fsmid, pid_t r_pid, module_t r_mdl);
+void chat_yau_resp_again(cache_fsm* entity, fsm_t peer_fsmid, pid_t r_pid, module_t r_mdl);
 
 void cache_fsm_destructor(void* entity);
-int cache_fsm_query(void* entity, void* data);
+int cache_fsm_req(void* entity, void* data);
+int cache_fsm_query(void* entity, void* msg);
 void cache_fsm_exception(void* entity);
 void cache_event(void* entity, void* msg);
 
@@ -26,7 +30,7 @@ void cache_fsm_constructor(void* entity, fsm_t fsmid)
     cache_en->constructor = cache_fsm_constructor;
     cache_en->destructor = cache_fsm_destructor;
     cache_en->event = cache_event;
-    cache_en->nextjump = cache_fsm_query;
+    cache_en->nextjump = cache_fsm_req;
     cache_en->exception = cache_fsm_exception;
 
     cache_en->key = 1;
@@ -53,7 +57,6 @@ void cache_event(void* entity, void* msg)
             cache_en->exception(entity);
     }
 
-
     return;
 }
 
@@ -71,12 +74,33 @@ void cache_fsm_destructor(void* entity)
     entity = NULL;
 }
 
+int cache_fsm_req(void* entity, void* msg)
+{
+    msg_t* data = (msg_t*) msg;
+    fsm_msg_head* fsm_head = (fsm_msg_head*)data->data;
+    req_t* preq = (req_t*) fsm_head->data;
+    
+    LOG_D("what:%s, peer fsmid[%u], my fsmid[%u]", preq->what, preq->src_fsmid, ((cache_fsm*)entity)->fsmid);
+    printf("what:%s, peer fsmid[%u], my fsmid[%u]\n", preq->what, preq->src_fsmid, ((cache_fsm*)entity)->fsmid);
+    chat_yau_resp((cache_fsm*)entity, fsm_head->fsmid, data->s_pid, data->s_mdl);
+    
+    CVTTO_CACHE(cache_en, entity);
+    cache_en->nextjump = cache_fsm_query;
+    return FSM_OK;
+}
+
 int cache_fsm_query(void* entity, void* msg)
 {
     msg_t* data = (msg_t*) msg;
-    chat_yau_resp(data->s_pid, data->s_mdl);
+    fsm_msg_head* fsm_head = (fsm_msg_head*)data->data;
+    req_t* preq = (req_t*) fsm_head->data;
+
+    LOG_D("what:%s, peer fsmid[%u], my fsmid[%u]", preq->what, preq->src_fsmid, ((cache_fsm*)entity)->fsmid);
+    printf("what:%s, peer fsmid[%u], my fsmid[%u]\n", preq->what, preq->src_fsmid, ((cache_fsm*)entity)->fsmid);
+
+    chat_yau_resp_again((cache_fsm*)entity, fsm_head->fsmid, data->s_pid, data->s_mdl);
     fsm_set_fsm_finish(entity);
-    
+
     return FSM_OK;
 }
 
@@ -88,10 +112,10 @@ void cache_fsm_exception(void* entity)
 }
 
 
-void chat_yau_resp(pid_t r_pid, module_t r_mdl)
+void chat_yau_resp(cache_fsm* entity, fsm_t peer_fsmid, pid_t r_pid, module_t r_mdl)
 {
     char content[] = "Nice to see you, too.";
-    size_t data_len = sizeof(msg_type_t) + sizeof(content);
+    size_t data_len = FSM_MSG_HEAD_LEN + sizeof(content);
     size_t msg_len = MSG_HEAD_LEN + data_len;
     char* req_buf = (char*) malloc(msg_len);
     if (!req_buf) return ;
@@ -99,17 +123,51 @@ void chat_yau_resp(pid_t r_pid, module_t r_mdl)
     msg_t* pmsg = (msg_t*) req_buf;
     pmsg->s_pid = getpid();
     pmsg->r_pid = r_pid;
-    pmsg->s_mdl = TTU;
+    pmsg->s_mdl = ME_MDL;
     pmsg->r_mdl = r_mdl;
     pmsg->data_len = data_len;
 
-    req_t* preq = (req_t*) pmsg->data;
-    preq->msg_type = TTU_YAU_CHAT_REQ;
+    fsm_msg_head* fsm_head = (fsm_msg_head*) pmsg->data;
+    fsm_head->fsmid = peer_fsmid;
+    fsm_head->msgtype = CACHE_RESP;
+
+    req_t* preq = (req_t*) fsm_head->data;
+    preq->src_fsmid = entity->fsmid;
     memcpy(preq->what, content, sizeof(content));
 
     if (SM_OK != send_msg(pmsg)){
         perror("send msg failed");
         return ;
     }
-    LOG_ND("say hello to yau");
+    LOG_D("say [%s] to yau", content);
+}
+
+void chat_yau_resp_again(cache_fsm* entity, fsm_t peer_fsmid, pid_t r_pid, module_t r_mdl)
+{
+    char content[] = "Find, thanks.";
+    size_t data_len = FSM_MSG_HEAD_LEN + sizeof(content);
+    size_t msg_len = MSG_HEAD_LEN + data_len;
+    char* req_buf = (char*) malloc(msg_len);
+    if (!req_buf) return ;
+
+    msg_t* pmsg = (msg_t*) req_buf;
+    pmsg->s_pid = getpid();
+    pmsg->r_pid = r_pid;
+    pmsg->s_mdl = ME_MDL;
+    pmsg->r_mdl = r_mdl;
+    pmsg->data_len = data_len;
+
+    fsm_msg_head* fsm_head = (fsm_msg_head*) pmsg->data;
+    fsm_head->fsmid = peer_fsmid;
+    fsm_head->msgtype = CACHE_QUERY_RESP;
+
+    req_t* preq = (req_t*) fsm_head->data;
+    preq->src_fsmid = entity->fsmid;
+    memcpy(preq->what, content, sizeof(content));
+
+    if (SM_OK != send_msg(pmsg)){
+        perror("send msg failed");
+        return ;
+    }
+    LOG_D("say [%s] to yau", content);
 }

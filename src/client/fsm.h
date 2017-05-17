@@ -26,16 +26,22 @@ typedef struct __tag_fsm_entity_base{
     FSM_ENTITY_BASE
 }fsm_entity_base;
 
-/* A fsm entity will be created 
- * while the specific type of msg type comes.
- * Client should initialize all kinds fsm_regist_info before
- * process start
+typedef struct fsm_msg_head{
+    int msgtype;
+    fsm_t fsmid;
+    
+    char data[];
+}fsm_msg_head;
+
+#define FSM_MSG_HEAD_LEN (sizeof(fsm_msg_head))
+
+/* A fsm entity would be created while the specific type of msg type comes.
+ * Client should initialize all kinds fsm_regist_info before process start.
  */
 typedef struct __tag_fsm_regist_info{
     int type;
     fsm_constructor constructor;
     fsm_creator creator;
-    //fsm_destructor  destructor;
 }fsm_reg;
 
 

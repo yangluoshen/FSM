@@ -10,24 +10,18 @@
 #include "fsm.h"
 #include "cachefsm.h"
 
-
 void process_yau_req(void* pmsg);
 
-
-void yau_chat(msg_t* data)
+void proc_fsm_req(msg_t* pmsg)
 {
-    req_t* preq = (req_t*) data->data;
-
-    printf("yau:%s\n", preq->what);
-    LOG_D("yau say hello to me:%s, msg_type[%u]", preq->what, preq->msg_type);
-
-    fsm_entity_base* entity = fsm_factory(preq->msg_type, data);
+    fsm_msg_head* fsm_head = (fsm_msg_head*) pmsg->data;
+    fsm_entity_base* entity = fsm_factory(fsm_head->msgtype, pmsg);
     if (!entity){
         LOG_NE("fsm_factory failed");
         return;
     }
 
-    entity->event(entity, data);
+    entity->event(entity, pmsg);
 
     if (entity->is_fsm_finish){
         LOG_D("fsm[%u] finish", entity->fsmid);
@@ -40,15 +34,39 @@ void yau_chat(msg_t* data)
     return;
 }
 
+void proc_fsm_resp(msg_t* pmsg)
+{
+    fsm_msg_head* fsm_head = (fsm_msg_head*) pmsg->data;
+    fsm_entity_base* entity = get_fsm_entity(fsm_head->fsmid);
+    if (!entity){
+        LOG_NE("get_fsm_entity failed");
+        return;
+    }
+
+    entity->event(entity, pmsg);
+
+    if (entity->is_fsm_finish){
+        LOG_D("fsm[%u], finish", entity->fsmid);
+        if (entity->destructor) entity->destructor(entity);
+
+        rmv_fsm_entity(entity->fsmid);
+    }
+
+    LOG_ND("Exit.");
+    return ;
+}
+
 void process_yau_req(void* data)
 {
     if (!data) return;
     msg_t* pmsg = (msg_t*) data;
-    req_t* preq = (req_t*) pmsg->data;
-    switch(preq->msg_type){
+    fsm_msg_head* fsm_head= (fsm_msg_head*) pmsg->data;
+    switch(fsm_head->msgtype){
         case CACHE_REQ: 
-            yau_chat(pmsg);
+            proc_fsm_req(pmsg);
             break;
+        case CACHE_QUERY_REQ:
+            proc_fsm_resp(pmsg);
         default:
             puts("unknown msg type");
             break;

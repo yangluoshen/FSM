@@ -5,14 +5,15 @@
 #include <malloc.h>
 #include <assert.h>
 #include <stdlib.h>
+#include "fsm.h"
 
 int send_msg(void*);
 
-void* pack_msg()
+
+void* pack_msg(int msgtype, fsm_t peer_fsmid, fsm_t src_fsmid, char* what)
 {
     // pack message
-    char content[] = "nice to see you!";
-    size_t data_len = sizeof(msg_type_t) + strlen(content) + 1;
+    size_t data_len = FSM_MSG_HEAD_LEN + strlen(what) + 1;
     size_t msg_len = MSG_HEAD_LEN + data_len;
     char* req_buf = (char*) malloc(msg_len);
     assert(req_buf);
@@ -23,27 +24,45 @@ void* pack_msg()
     pmsg->s_mdl = YAU;
     pmsg->r_mdl = TTU;
     pmsg->data_len = data_len;
+
+    fsm_msg_head* fsm_head = (fsm_msg_head*) pmsg->data;
+    fsm_head->msgtype = msgtype;
+    fsm_head->fsmid = peer_fsmid;
     
-    req_t* preq = (req_t*)pmsg->data;
-    preq->msg_type = CACHE_REQ;
-    memcpy(preq->what, content, strlen(content) + 1);
+    req_t* preq = (req_t*)fsm_head->data;
+    preq->src_fsmid = src_fsmid;
+    memcpy(preq->what, what, strlen(what) + 1);
     
     return req_buf;
 }
 
 void say_hello_to_ttu()
 {
-    void * pmsg = pack_msg();
+    void * pmsg = pack_msg(CACHE_REQ, -1, 30, "Nice to meet you!");
     if(SM_OK != send_msg(pmsg)){
         perror("send msg failed");
     }
 }
 
-
-void ttu_chat(msg_t* data)
+void proc_cache_resp(msg_t* data)
 {
-    printf("ttu:%s\n", ((req_t*)(data->data))->what);
-    //chat_yau_resp(data->s_pid, data->s_mdl);
+    fsm_msg_head* fsm_head = (fsm_msg_head*) data->data;
+    req_t* r = (req_t*) fsm_head->data;
+    printf("ttu:%s\n", r->what);
+    
+    void* pmsg = pack_msg(CACHE_QUERY_REQ, r->src_fsmid, 31, "How are you?");
+    if(SM_OK != send_msg(pmsg)){
+        perror("send msg failed");
+    }
+    //exit(1);
+}
+
+void proc_cache_query_resp(msg_t* data)
+{
+    fsm_msg_head* fsm_head = (fsm_msg_head*) data->data;
+    req_t* r = (req_t*) fsm_head->data;
+    printf("ttu:%s\n", r->what);
+
     exit(1);
 }
 
@@ -51,13 +70,17 @@ void process_ttu_req(void* data)
 {
     if (!data) return;
     msg_t* pmsg = (msg_t*) data;
-    req_t* preq = (req_t*) pmsg->data;
-    switch(preq->msg_type){
-        case TTU_YAU_CHAT_REQ: 
-            ttu_chat(pmsg);
+    fsm_msg_head* fsm_head = (fsm_msg_head*) pmsg->data;
+    switch(fsm_head->msgtype){
+        case CACHE_RESP: 
+            proc_cache_resp(pmsg);
+            break;
+        case CACHE_QUERY_RESP:
+            proc_cache_query_resp(pmsg);
             break;
         default:
             puts("unknown msg type");
             break;
     }
 }
+

@@ -197,7 +197,9 @@ int main(int argc, char* argv[])
         }
 // just for debug
 #ifdef YAU_MDL
-        say_hello_to_ttu();
+        static int count = 0;
+        if (count++ == 0)
+            say_hello_to_ttu();
 #endif
     }
 
