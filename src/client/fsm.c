@@ -71,6 +71,20 @@ void rmv_fsm_entity(fsm_t fsmid)
 {
     LOG_D("remove fsm entity[%u]", fsmid);
     fdict_remove(fsm_entity_pool, &fsmid);
+    free_fsm_id(fsmid);
+}
+
+int add_fsm_entity(fsm_t fsmid, void* entity)
+{
+    if (!fsm_entity_pool){
+        fsm_entity_pool = fdict_create(FSM_HASH_NUM, fsm_hash_match, fsm_hash_calc); 
+        if (!fsm_entity_pool) return -1;
+    }
+
+    if(FDICT_SUCCESS != fdict_insert(fsm_entity_pool, &fsmid, entity))
+        return -1;
+    
+    return 0;
 }
 
 /**************** fsm factory ***************/
@@ -99,12 +113,8 @@ fsm_entity_base* fsm_factory(int type, void* msg)
     constructor(entity, fsmid);
     if (!entity) goto FAILED;
 
-    // insert into fsm_entity_pool
-    if (!fsm_entity_pool){
-        fsm_entity_pool = fdict_create(FSM_HASH_NUM, fsm_hash_match, fsm_hash_calc); 
-        if (!fsm_entity_pool) goto FAILED;
-    }
-    fdict_insert(fsm_entity_pool, &fsmid, entity);
+    // insert into fsm entity pool
+    if (0 != add_fsm_entity(fsmid, entity)) goto FAILED;
 
     return entity;
 
@@ -185,18 +195,20 @@ void fsm_entity_base_destructor(void* entity)
         stop_timer(be->timer_list[i]);
         be->timer_list[i] = 0;
     }
+
 }
 
-int fsm_entity_start_timer(void* entity, time_t seconds)
+int fsm_entity_start_timer(void* entity, int timerid, time_t seconds)
 {
     if (!entity) return -1;
     CVTTO_BASE(base_entity, entity);
-    int tfd = start_timer(base_entity->fsmid, seconds);
+    int tfd = start_timer(timerid, base_entity->fsmid, seconds);
     if (tfd == -1){
         return -1;
     }
 
     if (-1 == fsm_entity_set_timer(entity, tfd)){
+        close(tfd);
         return -1;
     }
     

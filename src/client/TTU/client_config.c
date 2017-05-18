@@ -5,12 +5,15 @@
 const module_t ME_MDL = TTU;  /* the module type you want */
 
 void process_yau_req(void* pmsg);
+void proc_ttu_internal_msg(void* data);
 
 msg_driver_node g_msg_driver[] = 
 {
-    {YAU, process_yau_req}
+    {YAU, process_yau_req},
+    {TTU, proc_ttu_internal_msg}
 
 };
+
 const size_t FSM_DRIVER_SZ = sizeof(g_msg_driver)/sizeof(msg_driver_node);
 
 

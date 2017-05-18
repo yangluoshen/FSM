@@ -249,7 +249,7 @@ int check_process_conn()
                 process_unreg(&reg);
                 break;
             default:
-                LOG_E("Error: unknow process cmd[%d]\n", reg.cmd);
+                LOG_E("Error: unknow process cmd[%c]\n", reg.cmd);
                 break;
         }
     }

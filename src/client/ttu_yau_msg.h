@@ -21,5 +21,15 @@ enum MSG_TYPE{
     CACHE_QUERY_REQ,
     CACHE_QUERY_RESP,
 
+    TIME_OUT_MSG,
     MSG_TYPE_BUTT
+};
+
+
+enum E_TIMER_ID{
+    INVALID_TM = -1,
+    IDLE,
+    COMMON_TM,
+
+    TM_BUTT
 };

@@ -8,11 +8,13 @@
 #include <stdlib.h>
 #include <sys/epoll.h>
 #include <errno.h>
-
 #include <time.h>
 #include <sys/timerfd.h>
+
 #include "msg.h"
+#include "fsm.h"
 #include "adlist.h"
+#include "fdict.h"
 
 #include "client_base.h"
 
@@ -20,13 +22,13 @@
 #include "debug.h"
 const int G_LOGGER = 0;
 
-static list* timer_list;
+static fdict* timer_dict;
 list* g_fsm_driver;
 
 static char client_fifo [FIFO_NAME_LEN];
 const int epoll_size = 32;
 
-static int g_client_epfd;
+int g_client_epfd;
 static int dummy_clfd;
 
 /* client base essential */
@@ -34,6 +36,15 @@ int proc_prcs_reg(module_t type);
 void proc_prcs_unreg(void);
 int __send_request(const char* name, const void* msg, size_t len);
 void custome_processing(int fd);
+
+/* timer declearation */
+int timer_hash_match(void* ptr, fdict_key_t key);
+size_t timer_hash_calc(fdict* d, fdict_key_t key);
+int gen_real_timer(time_t sec, int isloop);
+fsm_timer* get_timer(int fd);
+msg_t* pack_timeout_msg(fsm_timer* ft);
+
+
 
 extern const module_t ME_MDL;
 extern const size_t FSM_DRIVER_SZ;
@@ -129,8 +140,10 @@ int epoll_init()
 
 int timer_init()
 {
-    if ((timer_list = listCreate()) == NULL) return -1;
-    timer_list->free = free;
+    const size_t timer_size = 256;
+    timer_dict = fdict_create(timer_size, timer_hash_match, timer_hash_calc);
+    if (!timer_dict) return -1;
+
     return 0;
 }
 
@@ -193,7 +206,8 @@ int main(int argc, char* argv[])
                 continue;
             }else if (ev_list[i].events & (EPOLLHUP | EPOLLERR)){
                 perror("read ev_list");
-                return -1; }
+                return -1; 
+            }
         }
 // just for debug
 #ifdef YAU_MDL
@@ -208,7 +222,16 @@ int main(int argc, char* argv[])
 
 void custome_processing(int fd)
 {
-    msg_t *pmsg = (msg_t*)read_fifo(fd);
+    msg_t *pmsg;
+    // 如果是超时消息, 需特殊处理
+    fsm_timer* ft = get_timer(fd);
+    if (ft){
+        pmsg = pack_timeout_msg(ft);
+    }
+    else{
+        pmsg = (msg_t*)read_fifo(fd);
+    }
+
     module_t type = pmsg->s_mdl;
 
     int i;
@@ -227,35 +250,20 @@ void custome_processing(int fd)
     free(pmsg);
 }
 
+/************** Timer ********************/
 
-/* send a msg to server */
-int send_msg(void* m)
+int timer_hash_match(void* ptr, fdict_key_t key)
 {
-    char sv_fifo_name[FIFO_NAME_LEN] = {0};
-
-    msg_t* pmsg = (msg_t*)m;
-
-    GEN_SV_NAME(sv_fifo_name, pmsg->s_pid);
-    return fsm_send_msg(sv_fifo_name, m);
+    if (!ptr || !key) return 0;
+    fsm_timer* t = (fsm_timer*) ptr;
+    return t->timerfd == *(int*)key;
 }
 
-int proc_prcs_reg(module_t type)
+size_t timer_hash_calc(fdict* d, fdict_key_t key)
 {
-    prcs_reg reg;
-    reg.cmd = PRCS_REG;
-    reg.pid = getpid();
-    reg.mdl = type;
-
-    return __send_request(SV_REG_FIFO, &reg, sizeof(reg));
-}
-
-void proc_prcs_unreg(void)
-{
-    prcs_reg reg;
-    reg.cmd = PRCS_UNREG;
-    reg.pid = getpid();
-
-    (void)__send_request(SV_REG_FIFO, &reg, sizeof(reg));
+    if (!d || !key) return -1;
+    int hash = *((int*)key) % d->hash_size;
+    return (size_t)hash;
 }
 
 int gen_real_timer(time_t sec, int isloop)
@@ -288,7 +296,7 @@ int gen_real_timer(time_t sec, int isloop)
     return fd;
 }
 
-int start_timer(fsm_t fsmid, time_t seconds)
+int start_timer(int timerid, fsm_t fsmid, time_t seconds)
 {
     int tfd = gen_real_timer(seconds, NO_LOOP);
     if (-1 == tfd){
@@ -307,37 +315,98 @@ int start_timer(fsm_t fsmid, time_t seconds)
     struct epoll_event ev;
     ev.events = EPOLLIN;
     ev.data.fd = tfd;
-    if (epoll_ctl(g_client_epfd, EPOLL_CTL_ADD, tfd, &ev) == -1) goto RELEASE;
+    if (epoll_ctl(g_client_epfd, EPOLL_CTL_ADD, tfd, &ev) == -1){
+        perror("start timer failed\n");
+        close(tfd);
+        free(ft);
+        return -1;
+    }
     
     // append this timer to timerlist so that we can find it while it is stopped
+    ft->timerid = timerid;
     ft->timerfd = tfd;
     ft->fsmid = fsmid;
-    if (NULL == listAddNodeTail(timer_list, ft)) goto RELEASE;
+    if (FDICT_SUCCESS != fdict_insert(timer_dict, &ft->timerfd, ft)){
+        LOG_NE("fdict_insert failed");
+        close(tfd);
+        free(ft);
+        return -1;
+    }
 
+    LOG_D("start timer[%d] success", tfd);
     return tfd;
-
-RELEASE:
-    close(tfd);
-    free(ft);
-    perror("start timer failed\n");
-    return -1;
 }
 
 void stop_timer(int timerfd)
 {
-    listNode* node;
-    listIter* iter = listGetIterator(timer_list, AL_START_HEAD);
-    while ((node = listNext(iter)) != NULL){
-        fsm_timer* ft = (fsm_timer*) node->value;
-        if (!ft) continue;
-        if (timerfd == ft->timerfd){
-            // remove from epoll
-            (void)epoll_ctl(g_client_epfd, EPOLL_CTL_DEL, ft->timerfd, NULL);
-            // remove from timer_list
-            listDelNode(timer_list, node);
-            break;
-        }
-    }
+    LOG_ND("Enter");
+    fsm_timer* ft = (fsm_timer*) fdict_find(timer_dict, &timerfd);
+    if (!ft) return;
 
-    free (iter);
+    (void) epoll_ctl(g_client_epfd, EPOLL_CTL_DEL, ft->timerfd, NULL);
+    close(timerfd);
+    (void)fdict_remove(timer_dict, &timerfd);
+
+    LOG_D("stop timer[%d]", timerfd);
+    return;
 }
+
+fsm_timer* get_timer(int fd)
+{
+    return (fsm_timer*) fdict_find(timer_dict, &fd);
+}
+
+msg_t* pack_timeout_msg(fsm_timer* ft)
+{
+    int data_len = FSM_MSG_HEAD_LEN + sizeof (fsm_timer);
+    int msg_len = MSG_HEAD_LEN + data_len;
+    msg_t* m = (msg_t*) malloc(msg_len);
+    if (!m) return NULL;
+    m->s_pid = getpid();
+    m->r_pid = getpid();
+    m->s_mdl = ME_MDL;
+    m->r_mdl = ME_MDL;
+    m->data_len = data_len;
+
+    fsm_msg_head* fh = (fsm_msg_head*) m->data;
+    fh->fsmid = ft->fsmid;
+    fh->msgtype = TIMEOUT_MSG;
+
+    fsm_timer* t = (fsm_timer*)fh->data;
+    t->timerfd = ft->timerfd;
+    t->fsmid = ft->fsmid;
+    t->timerid = ft->timerid;
+
+    return m;
+}
+
+/* send a msg to server */
+int send_msg(void* m)
+{
+    char sv_fifo_name[FIFO_NAME_LEN] = {0};
+
+    msg_t* pmsg = (msg_t*)m;
+
+    GEN_SV_NAME(sv_fifo_name, pmsg->s_pid);
+    return fsm_send_msg(sv_fifo_name, m);
+}
+
+int proc_prcs_reg(module_t type)
+{
+    prcs_reg reg;
+    reg.cmd = PRCS_REG;
+    reg.pid = getpid();
+    reg.mdl = type;
+
+    return __send_request(SV_REG_FIFO, &reg, sizeof(reg));
+}
+
+void proc_prcs_unreg(void)
+{
+    prcs_reg reg;
+    reg.cmd = PRCS_UNREG;
+    reg.pid = getpid();
+
+    (void)__send_request(SV_REG_FIFO, &reg, sizeof(reg));
+}
+

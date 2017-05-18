@@ -68,7 +68,8 @@ void* cache_fsm_create()
 void cache_fsm_destructor(void* entity)
 {    
     LOG_ND("cache fsm destructor");
-    fsm_entity_base_destructor(entity);
+
+    fsm_entity_base_destructor(entity); 
 
     free(entity);
     entity = NULL;
@@ -110,7 +111,6 @@ void cache_fsm_exception(void* entity)
     fsm_set_fsm_finish(entity);
     return;
 }
-
 
 void chat_yau_resp(cache_fsm* entity, fsm_t peer_fsmid, pid_t r_pid, module_t r_mdl)
 {
