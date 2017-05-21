@@ -2,7 +2,7 @@
 #include <malloc.h>
 #include <limits.h>
 
-#include "client_base.h"
+#include "main.h"
 #include "fdict.h"
 #include "debug.h"
 
@@ -137,6 +137,9 @@ RELEASE:
  */
 void fsm_entity_base_destructor(void* entity);
 void fsm_entity_timer_init(void* entity);
+void fsm_base_event(void* entity, void* msg);
+int fsm_entity_start_timer(void* entity, int timerid, time_t seconds);
+void fsm_entity_stop_timer(void* entity, int timerfd);
 
 void fsm_entity_base_constructor(void* entity, fsm_t fsmid)
 {
@@ -144,15 +147,46 @@ void fsm_entity_base_constructor(void* entity, fsm_t fsmid)
     CVTTO_BASE(base_entity, entity);
     base_entity->fsmid = fsmid;
     base_entity->is_fsm_finish = 0;
-    base_entity->event = NULL;
+    base_entity->event = fsm_base_event;
     base_entity->nextjump = NULL;
     base_entity->destructor = fsm_entity_base_destructor;
 
     fsm_entity_timer_init(entity);
+    fsm_entity_start_timer(entity, 0, -1);
 }
 
 void fsm_base_event(void* entity, void* msg)
 {
+    if (!entity || !msg){
+        LOG_E("parameters entity[%p] or msg[%p] is null", entity, msg);
+        return ;
+    }
+
+    CVTTO_BASE(base, entity);
+
+    int msgtype = GET_MSGTYPE(msg);
+    if (msgtype == TIMEOUT_MSG){
+        LOG_D("get a time out msg [%d]", msgtype);
+        int timerfd = GET_TIMERFD(msg);
+        fsm_entity_stop_timer(entity, timerfd);
+    }
+
+    if (!base->nextjump){
+        LOG_NE("nextjump is null");
+        fsm_set_fsm_finish(entity);
+        if (base->exception)
+            base->exception(entity);
+        return;
+    }
+
+    int ret = base->nextjump(entity, msg);
+    if (FSM_OK != ret){
+        LOG_E("next jump failed[%d]", ret);
+        if (base->exception)
+            base->exception(entity);
+    }
+    
+    return;
 }
 
 void fsm_entity_timer_init(void* entity)
@@ -202,9 +236,15 @@ int fsm_entity_start_timer(void* entity, int timerid, time_t seconds)
 {
     if (!entity) return -1;
     CVTTO_BASE(base_entity, entity);
-    int tfd = start_timer(timerid, base_entity->fsmid, seconds);
-    if (tfd == -1){
-        return -1;
+    LOG_D("start timer,fsmid[%u],timerid[%d],second[%d]",base_entity->fsmid, timerid, seconds);
+    
+    int tfd = -1;
+    if ((time_t)-1 != seconds){
+        tfd = start_timer(timerid, base_entity->fsmid, seconds);
+        if (tfd == -1){
+            LOG_ND("start timer failed");
+            return -1;
+        }
     }
 
     if (-1 == fsm_entity_set_timer(entity, tfd)){
@@ -212,6 +252,7 @@ int fsm_entity_start_timer(void* entity, int timerid, time_t seconds)
         return -1;
     }
     
+    LOG_D("start timer success,timerfd[%d]", tfd);
     return 0;
 }
 

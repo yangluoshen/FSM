@@ -48,6 +48,9 @@ typedef struct __tag_fsm_regist_info{
 fsm_entity_base* fsm_factory(int type, void* msg);
 void fsm_entity_base_constructor(void* entity, fsm_t fsmid);
 void fsm_entity_base_destructor(void* entity);
+void fsm_entity_base_exception(void* entity);
+int fsm_entity_start_timer(void* entity, int timerid, time_t seconds);
+void fsm_entity_stop_timer(void* entity, int timerfd);
 void fsm_set_fsm_finish(void* entity);
 void rmv_fsm_entity(fsm_t fsmid);
 void* get_fsm_entity(fsm_t fsmid);
@@ -68,5 +71,31 @@ enum FSM_RETCODE{
 
 #define CVTTO_BASE(base, entity)\
     fsm_entity_base* (base) = (fsm_entity_base*) (entity);
+
+
+#define GET_MSGTYPE(msg) \
+    (((fsm_msg_head*)(((msg_t*)(msg))->data))->msgtype);
+    
+#define GET_FSMID(msg) \
+    (((fsm_msg_head*)(((msg_t*)(msg))->data))->fsmid);
+
+#define GET_DATA(msg) \
+    (((fsm_msg_head*)(((msg_t*)(msg))->data))->data);
+
+#define SET_MSG_TYPE(msg, type) \
+    (((fsm_msg_head*)(((msg_t*)(msg))->data))->msgtype)=(type);
+
+#define SET_MSG_FSMID(msg, id) \
+    (((fsm_msg_head*)(((msg_t*)(msg))->data))->fsmid)=(id);
+
+#define INIT_MSG_HEAD(m, spid, rpid, smdl, rmdl, len) \
+    do {\
+        ((msg_t*)(m))->s_pid=(spid);\
+        ((msg_t*)(m))->r_pid=(rpid);\
+        ((msg_t*)(m))->s_mdl=(smdl);\
+        ((msg_t*)(m))->r_mdl=(rmdl);\
+        ((msg_t*)(m))->data_len=(len);\
+    }while(0)
+
 
 #endif /*__FSM_H */

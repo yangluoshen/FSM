@@ -1,5 +1,5 @@
 #include "client_config.h"
-#include "client_base.h"
+#include "main.h"
 
 const module_t ME_MDL = YAU;  /* the module type you want */
 

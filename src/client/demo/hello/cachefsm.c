@@ -1,9 +1,8 @@
 
 #include "cachefsm.h"
-#include "fsm.h"
 #include "debug.h"
 #include "ttu_yau_msg.h"
-#include "client_base.h"
+#include "main.h"
 #include <malloc.h>
 
 extern module_t ME_MDL;
@@ -48,6 +47,9 @@ void cache_event(void* entity, void* msg)
 
     if(!cache_en->nextjump){
         LOG_NE("nextjump is null");
+        fsm_set_fsm_finish(entity);
+        if (cache_en->exception)
+            cache_en->exception(entity);
         return ;
     }
     int ret = cache_en->nextjump(entity, msg);
@@ -79,9 +81,16 @@ int cache_fsm_req(void* entity, void* msg)
 {
     msg_t* data = (msg_t*) msg;
     fsm_msg_head* fsm_head = (fsm_msg_head*)data->data;
+
+    if (TIMEOUT_MSG == fsm_head->msgtype){
+        fsm_set_fsm_finish(entity);
+        LOG_NE("Time out");
+        return FSM_FAIL;
+    }
+
     req_t* preq = (req_t*) fsm_head->data;
-    
-    LOG_D("what:%s, peer fsmid[%u], my fsmid[%u]", preq->what, preq->src_fsmid, ((cache_fsm*)entity)->fsmid);
+
+    LOG_D("what:%s, peer fsmid[%u], my fsmid[%u], msgtype[%d]", preq->what, preq->src_fsmid, ((cache_fsm*)entity)->fsmid, fsm_head->msgtype);
     printf("what:%s, peer fsmid[%u], my fsmid[%u]\n", preq->what, preq->src_fsmid, ((cache_fsm*)entity)->fsmid);
     chat_yau_resp((cache_fsm*)entity, fsm_head->fsmid, data->s_pid, data->s_mdl);
     
@@ -94,9 +103,15 @@ int cache_fsm_query(void* entity, void* msg)
 {
     msg_t* data = (msg_t*) msg;
     fsm_msg_head* fsm_head = (fsm_msg_head*)data->data;
+    if (TIMEOUT_MSG == fsm_head->msgtype){
+        fsm_set_fsm_finish(entity);
+        LOG_NE("Time out");
+        return FSM_FAIL;
+    }
+
     req_t* preq = (req_t*) fsm_head->data;
 
-    LOG_D("what:%s, peer fsmid[%u], my fsmid[%u]", preq->what, preq->src_fsmid, ((cache_fsm*)entity)->fsmid);
+    LOG_D("what:%s, peer fsmid[%u], my fsmid[%u],msg_type[%d]", preq->what, preq->src_fsmid, ((cache_fsm*)entity)->fsmid, fsm_head->msgtype);
     printf("what:%s, peer fsmid[%u], my fsmid[%u]\n", preq->what, preq->src_fsmid, ((cache_fsm*)entity)->fsmid);
 
     chat_yau_resp_again((cache_fsm*)entity, fsm_head->fsmid, data->s_pid, data->s_mdl);

@@ -51,6 +51,8 @@ enum E_MODULE_TYPE{
 	TTU = 0,
 	YAU,
 	BYU,
+    PHU,
+    RTU,
 
 	UKU    /*unknown unit*/
 };

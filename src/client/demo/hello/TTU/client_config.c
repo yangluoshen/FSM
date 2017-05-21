@@ -1,12 +1,14 @@
 #include "client_config.h"
-#include "client_base.h"
+#include "main.h"
 #include "cachefsm.h"
+#include "ttu_yau_msg.h"
 
 const module_t ME_MDL = TTU;  /* the module type you want */
 
 void process_yau_req(void* pmsg);
 void proc_ttu_internal_msg(void* data);
 
+// 模块消息路由表. 根据不同模块路由给不同的处理函数入口
 msg_driver_node g_msg_driver[] = 
 {
     {YAU, process_yau_req},
@@ -17,6 +19,7 @@ msg_driver_node g_msg_driver[] =
 const size_t FSM_DRIVER_SZ = sizeof(g_msg_driver)/sizeof(msg_driver_node);
 
 
+// 自动机注册表.可根据不同的消息类型创建指定类型的自动机
 fsm_reg g_fsm_reg_table[] = 
 {
     {CACHE_REQ, cache_fsm_constructor, cache_fsm_create}
@@ -38,6 +41,7 @@ const msg_driver_node* get_driver_node(size_t index)
     return NULL;
 }
 
+// 根据对端消息类型获取注册表中对应的自动机生成器
 fsm_reg* get_reginfo_by_msgtype(int type)
 {
     int i;
@@ -48,5 +52,3 @@ fsm_reg* get_reginfo_by_msgtype(int type)
     } 
     return NULL;
 }
-
-

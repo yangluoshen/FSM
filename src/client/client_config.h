@@ -2,8 +2,8 @@
 #define __CLIENT_CONFIG_H
 
 #include "fsm.h"
-#include "client_base.h"
-#include "ttu_yau_msg.h"
+#include "main.h"
+//#include "ttu_yau_msg.h"
 
 enum ENUM_FSM_EPPOL_TIMEOUT{
     FSM_EPOLL_BLOCK = -1,

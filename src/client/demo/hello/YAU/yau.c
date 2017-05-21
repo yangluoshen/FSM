@@ -42,6 +42,7 @@ void say_hello_to_ttu()
     if(SM_OK != send_msg(pmsg)){
         perror("send msg failed");
     }
+    //exit(1);
 }
 
 void proc_cache_resp(msg_t* data)

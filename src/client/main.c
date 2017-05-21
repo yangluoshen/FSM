@@ -16,7 +16,7 @@
 #include "adlist.h"
 #include "fdict.h"
 
-#include "client_base.h"
+#include "main.h"
 
 #define CLOG_MAIN
 #include "debug.h"
@@ -226,6 +226,7 @@ void custome_processing(int fd)
     // 如果是超时消息, 需特殊处理
     fsm_timer* ft = get_timer(fd);
     if (ft){
+        LOG_ND("get timeout msg");
         pmsg = pack_timeout_msg(ft);
     }
     else{
@@ -358,6 +359,7 @@ fsm_timer* get_timer(int fd)
 
 msg_t* pack_timeout_msg(fsm_timer* ft)
 {
+    LOG_ND("pack time out msg");
     int data_len = FSM_MSG_HEAD_LEN + sizeof (fsm_timer);
     int msg_len = MSG_HEAD_LEN + data_len;
     msg_t* m = (msg_t*) malloc(msg_len);

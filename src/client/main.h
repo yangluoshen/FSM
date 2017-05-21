@@ -29,5 +29,11 @@ void stop_timer(int timerfd);
 
 int send_msg(void* m);
 
-#define TIMEOUT_MSG (5000)
+#define TIMEOUT_MSG (9999)
+
+#define GET_TIMERFD(msg) \
+    (((fsm_timer*)(((fsm_msg_head*)(((msg_t*)(msg))->data))->data))->timerfd);
+
+#define GET_TIMERID(msg) \
+    (((fsm_timer*)(((fsm_msg_head*)(((msg_t*)(msg))->data))->data))->timerid);
 #endif 

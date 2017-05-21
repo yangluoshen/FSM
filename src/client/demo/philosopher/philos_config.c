@@ -1,23 +1,29 @@
 #include "client_config.h"
+#include "main.h"
+#include "philosfsm.h"
 
-const module_t ME_MDL = TTU;  /* the module type you want */
+const module_t ME_MDL = PHU;
 
-void process_yau_req(void* pmsg);
+void proc_rtu(void* pmsg);
+void proc_internal_msg(void* pmsg);
 
+// 模块消息路由表. 根据不同模块路由给不同的处理函数入口
 msg_driver_node g_msg_driver[] = 
 {
-    {YAU, process_yau_req}
+    {RTU, proc_rtu},
+    {PHU, proc_internal_msg}
 
 };
+
 const size_t FSM_DRIVER_SZ = sizeof(g_msg_driver)/sizeof(msg_driver_node);
 
-fsm_reg g_fsm_reg_table[] = 
+// 自动机注册表.可根据不同的消息类型创建指定类型的自动机
+fsm_reg g_fsm_reg_table[] =
 {
-    {YAU_TTU_CHAT_REQ, NULL, NULL}
+    {PHILOS_CREATE_REQ, philos_fsm_constructor, philos_fsm_create}
 
 };
 
-/*FSM_EPOLL_BLOCK by default */
 const int FSM_CLIENT_EPOLL_TIMEOUT = FSM_EPOLL_BLOCK;
 
 size_t get_driver_size(void)
@@ -33,7 +39,8 @@ const msg_driver_node* get_driver_node(size_t index)
     return NULL;
 }
 
-fsm_reg* get_reginfo_by_msgtype(msg_t type)
+// 根据对端消息类型获取注册表中对应的自动机生成器
+fsm_reg* get_reginfo_by_msgtype(int type)
 {
     int i;
     size_t s = sizeof(g_fsm_reg_table)/sizeof(fsm_reg);
@@ -43,5 +50,3 @@ fsm_reg* get_reginfo_by_msgtype(msg_t type)
     } 
     return NULL;
 }
-
-
