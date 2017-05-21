@@ -5,8 +5,10 @@ FLAGS+= -L$(ROOT_DIR)/deps/adlist/
 FLAGS+= -ladlist
 FLAGS+= -DYAU_MDL
 
+BASE_SRC= $(ROOT_DIR)/src/fsm_base.c $(ROOT_DIR)/src/client/fsm.c  $(ROOT_DIR)/src/client/client_base.c 
+DEPS_SRC= $(ROOT_DIR)/src/fdict.c $(ROOT_DIR)/src/flist.c
 SRC=
-SRC+= yau.c client_config.c $(ROOT_DIR)/src/debug.c $(ROOT_DIR)/src/fsm_base.c $(ROOT_DIR)/src/client/client_base.c
+SRC+= $(BASE_SRC) $(DEPS_SRC)  client_config.c $(ROOT_DIR)/src/debug.c  yau.c
 
 yau: $(SRC)
 	$(CC) -g $^  -o $@ -Wall -std=c99 -pedantic $(FLAGS)
