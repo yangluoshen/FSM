@@ -28,7 +28,7 @@ typedef struct __tag_fsm_entity_base{
 
 typedef struct fsm_msg_head{
     int msgtype;
-    fsm_t fsmid;
+    fsm_t fsmid;    
     
     char data[];
 }fsm_msg_head;
@@ -55,6 +55,8 @@ void fsm_set_fsm_finish(void* entity);
 void rmv_fsm_entity(fsm_t fsmid);
 void* get_fsm_entity(fsm_t fsmid);
 
+void proc_fsm_req(msg_t* pmsg);
+void proc_fsm_resp(msg_t* pmsg);
 
 #define MIN_COMMON_FSMID (50)
 #define FSM_HASH_NUM (110)
@@ -74,18 +76,18 @@ enum FSM_RETCODE{
 
 
 #define GET_MSGTYPE(msg) \
-    (((fsm_msg_head*)(((msg_t*)(msg))->data))->msgtype);
+    (((fsm_msg_head*)(((msg_t*)(msg))->data))->msgtype)
     
 #define GET_FSMID(msg) \
-    (((fsm_msg_head*)(((msg_t*)(msg))->data))->fsmid);
+    (((fsm_msg_head*)(((msg_t*)(msg))->data))->fsmid)
 
 #define GET_DATA(msg) \
-    (((fsm_msg_head*)(((msg_t*)(msg))->data))->data);
+    (((fsm_msg_head*)(((msg_t*)(msg))->data))->data)
 
-#define SET_MSG_TYPE(msg, type) \
+#define SET_MSGTYPE(msg, type) \
     (((fsm_msg_head*)(((msg_t*)(msg))->data))->msgtype)=(type);
 
-#define SET_MSG_FSMID(msg, id) \
+#define SET_FSMID(msg, id) \
     (((fsm_msg_head*)(((msg_t*)(msg))->data))->fsmid)=(id);
 
 #define INIT_MSG_HEAD(m, spid, rpid, smdl, rmdl, len) \

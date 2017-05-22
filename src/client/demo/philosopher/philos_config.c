@@ -1,16 +1,17 @@
 #include "client_config.h"
 #include "main.h"
 #include "philosfsm.h"
+#include "chopqueryfsm.h"
 
 const module_t ME_MDL = PHU;
 
-void proc_rtu(void* pmsg);
+//void proc_rtu(void* pmsg);
 void proc_internal_msg(void* pmsg);
 
 // 模块消息路由表. 根据不同模块路由给不同的处理函数入口
 msg_driver_node g_msg_driver[] = 
 {
-    {RTU, proc_rtu},
+    //{RTU, proc_rtu},
     {PHU, proc_internal_msg}
 
 };
@@ -20,7 +21,8 @@ const size_t FSM_DRIVER_SZ = sizeof(g_msg_driver)/sizeof(msg_driver_node);
 // 自动机注册表.可根据不同的消息类型创建指定类型的自动机
 fsm_reg g_fsm_reg_table[] =
 {
-    {PHILOS_CREATE_REQ, philos_fsm_constructor, philos_fsm_create}
+    {PHILOS_CREATE_REQ, philos_fsm_constructor, philos_fsm_create},
+    {PHILOS_CHOP_REQ, chop_fsm_constructor, chop_fsm_create}
 
 };
 

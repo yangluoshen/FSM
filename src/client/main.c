@@ -331,6 +331,7 @@ int start_timer(int timerid, fsm_t fsmid, time_t seconds)
         LOG_NE("fdict_insert failed");
         close(tfd);
         free(ft);
+        epoll_ctl(g_client_epfd, EPOLL_CTL_DEL, tfd, NULL);
         return -1;
     }
 

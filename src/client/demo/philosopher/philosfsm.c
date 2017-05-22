@@ -4,44 +4,14 @@
 
 #include <malloc.h>
 
+#define QUERY_LEFT(who) (who)
+
+#define QUERY_RIGHT(who) \
+    (((who) + 1) % philos_count)
+
 extern module_t ME_MDL;
-
-/*
-void philos_event(void* entity, void* msg)
-{
-    if (!entity || !msg){
-        LOG_E("parameters entity[%p] or msg[%p] is null", entity, msg);
-        return ;
-    }
-
-    CVTTO_PHILOS(phi, entity);
-
-    int msgtype = GET_MSG_TYPE(msg);
-    if (msgtype == TIMEOUT_MSG){
-        LOG_D("get a time out msg [%d]", msgtype);
-        int timerfd = GET_TIMERFD(msg);
-        fsm_entity_stop_timer(entity, msg);
-    }
-
-    if (!phi->nextjump){
-        LOG_NE("nextjump is null");
-        fsm_set_fsm_finish(entity);
-        if (phi->exception)
-            phi->exception(entity);
-        return;
-    }
-
-    int ret = phi->nextjump(entity, msg);
-    if (FSM_OK != ret){
-        LOG_E("next jump failed[%d]", ret);
-        if (phi->exception)
-            phi->exception(entity);
-    }
-    
-    return;
-}
-*/
-
+extern fdict* philos_dict;
+extern unsigned int philos_count;
 
 int philos_fsm_wait(void* entity, void* msg);
 int proc_chopstick_query_resp(void* entity, void* msg);
@@ -49,9 +19,9 @@ int proc_chopstick_query_resp(void* entity, void* msg);
 int philos_think(void* entity)
 {
     CVTTO_PHILOS(phi, entity);
-    int ret = fsm_entity_start_timer(entity, THINK_TM, phi->think_time);
+    int ret = fsm_entity_start_timer(entity, THINK_TM, phi->philos->think_time);
     if (0 != ret) return FSM_FAIL;
-    phi->status = THINKING;
+    phi->philos->status = THINKING;
     phi->nextjump = philos_fsm_wait;
 
     return FSM_OK;
@@ -61,36 +31,70 @@ int philos_fsm_save_info(void* entity, void* msg)
 {
     if (!entity || !msg) return FSM_FAIL;
 
-    philos_create_req* req = (philos_create_req* )GET_DATA(msg);
-    CVTTO_PHILOS(phi, entity);
-    phi->think_time = req->think_time;
-    phi->eat_time = req->eat_time;
-    phi->whoami = req->whoami;
+    if (!philos_dict){
+        philos_dict = fdict_create(MAX_PHILOS_NUM, philos_hash_match, philos_hash_calc);
+        if (!philos_dict){
+            LOG_NE("create fdict failed");
+            return FSM_FAIL;
+        }
+    }
+    
+    philosopher* phi = (philosopher*) malloc(sizeof (philosopher));
+    if (!phi) return FSM_FAIL;
+
+    memcpy (phi, GET_DATA(msg), sizeof (philosopher));
+    if (FDICT_SUCCESS != fdict_insert(philos_dict, &phi->whoami, phi)){
+        LOG_NE("insert philosopher to dict failed");
+        return FSM_FAIL;
+    }
+    CVTTO_PHILOS(phifsm, entity);
+
+    phifsm->philos = phi;
+    philos_count += 1;
 
     return  philos_think(entity);
 }
 
-int send_chopstick_query_req(void* entity, int querywhat)
+msg_t* pack_chop_req_msg(int chop_idx, int dowhat, fsm_t fsmid)
 {
-    if (!entity) return FSM_FAIL;
-
-    size_t data_len = FSM_MSG_HEAD_LEN + sizeof(philos_chop_req);
+    size_t data_len = FSM_MSG_HEAD_LEN + sizeof(chop_req);
     size_t msg_len = data_len + MSG_HEAD_LEN;
 
     msg_t* m = (msg_t*) malloc(msg_len);
-    if (!m) return FSM_FAIL;
+    if (!m) return NULL;
+    INIT_MSG_HEAD(m, getpid(), getpid(), PHU, PHU, data_len);
 
-    INIT_MSG_HEAD(m, getpid(), -1, PHU, RTU, data_len);
+    SET_MSGTYPE(m, PHILOS_CHOP_REQ);
+    SET_FSMID(m, fsmid);
+
+    chop_req* req = (chop_req*) GET_DATA(m);
+    req->dowhat = dowhat;
+    req->chop_idx = chop_idx;
+
+    return m;
+}
+
+int send_chopstick_query_req(void* entity)
+{
+    if (!entity) return FSM_FAIL;
 
     CVTTO_PHILOS(phi, entity);
+    int chop_idx;
+    if (phi->chops[0] == -1){
+        chop_idx = QUERY_LEFT(phi->philos->whoami);
+        phi->chops[0] = chop_idx;
+    }
+    else if (phi->chops[1] == -1){
+        chop_idx = QUERY_RIGHT(phi->philos->whoami);
+        phi->chops[1] = chop_idx;
+    }
+    else {
+        LOG_NE("No need to get chopstick");
+        return FSM_FAIL;
+    }
     
-    SET_MSG_TYPE(m, PHILOS_CHOP_REQ);
-    SET_MSG_FSMID(m, phi->fsmid);
+    msg_t * m = pack_chop_req_msg(chop_idx, GET, phi->fsmid);
 
-    philos_chop_req* req = (philos_chop_req*) GET_DATA(m);
-    req->whoami = phi->whoami;
-    req->querywhat = querywhat;
-    
     int ret = fsm_entity_start_timer(entity, QUERY_CHOP_TM, QUERY_CHOPSTICK_TIMEOUT);
     if (0 != ret){
         LOG_NE("start timer failed");
@@ -104,8 +108,8 @@ int send_chopstick_query_req(void* entity, int querywhat)
         return FSM_FAIL;
     }
 
-    phi->nextjump = philos_fsm_wait;
-    phi->status = BUSY;
+    phi->nextjump = proc_chopstick_query_resp;
+    phi->philos->status = BUSY;
 
     LOG_ND("send chopstick query req success");
     return FSM_OK;
@@ -114,29 +118,67 @@ int send_chopstick_query_req(void* entity, int querywhat)
 int philos_eat(void* entity)
 {
     CVTTO_PHILOS(phi, entity);
-    int ret = fsm_entity_start_timer(entity, EAT_TM, phi->eat_time);
+    int ret = fsm_entity_start_timer(entity, EAT_TM, phi->philos->eat_time);
     if (0 != ret) return FSM_FAIL;
-    phi->status = EATTING;
+    phi->philos->status = EATTING;
     phi->nextjump = philos_fsm_wait;
 
     return FSM_OK;
 }
 
+
+void send_chop_rollback_req(void* entity)
+{
+    if (!entity) return ;
+
+    CVTTO_PHILOS(phi, entity);
+    int i;
+    for (i=0; i < 2; ++i){
+        int chop_idx = phi->chops[i];
+        if (-1 == chop_idx)
+            break;
+        msg_t* m = pack_chop_req_msg(chop_idx, BACK, phi->fsmid);
+        if (SM_OK != send_msg(m)){
+            LOG_NE("send msg failed");
+            exit(1);
+        }
+        phi->chops[i] = -1;
+    }
+}
+
+
 int proc_chopstick_query_resp(void* entity, void* msg)
 {
     if (!entity || !msg) return FSM_FAIL;
-    philos_chop_resp* resp = (philos_chop_resp*) GET_DATA(msg);
-    LOG_D("query chopstick[%d], isok[%d]", resp->querywhat, resp->isok);
+
+    int msgtype = GET_MSGTYPE(msg);
+    if (msgtype == TIMEOUT_MSG){
+        LOG_ND("query chopstick timeout");
+        send_chop_rollback_req(entity);
+        return FSM_OK;
+    }
+
+    chop_resp* resp = (chop_resp*) GET_DATA(msg);
+    LOG_D("query chopstick[%d], isok[%d]", resp->chop_idx, resp->isok);
+
+    if (msgtype != PHILOS_CHOP_RESP){
+        LOG_D("unknow msg[%d]" ,msgtype);
+        return FSM_OK;
+    }
+
     if (1 != resp->isok){
+        send_chop_rollback_req(entity);
         philos_think(entity);
         return FSM_OK;
     }
     
-    if (resp->querywhat == RIGHT_CHOP){
+    CVTTO_PHILOS(phi, entity);
+    //如果是右手边的筷子拿到，就可以eat了
+    if (resp->chop_idx == phi->chops[1]){
         return philos_eat(entity);
     }
     
-    return send_chopstick_query_req(entity, RIGHT_CHOP);
+    return send_chopstick_query_req(entity);
 }
 
 int philos_proc_timeout(void* entity, void* msg)
@@ -147,12 +189,15 @@ int philos_proc_timeout(void* entity, void* msg)
     int timerid = GET_TIMERID(msg);
     switch(timerid){
         case THINK_TM:
-            ret = send_chopstick_query_req(entity, LEFT_CHOP);
+            ret = send_chopstick_query_req(entity);
             break;
         case EAT_TM:
+            // eat结束之后,需将筷子放回
+            send_chop_rollback_req(entity);
             ret = philos_think(entity);
             break;
         case QUERY_CHOP_TM:
+            LOG_NE("should not print this!");
             break;
         default:
             break;
@@ -160,12 +205,6 @@ int philos_proc_timeout(void* entity, void* msg)
 
     return ret;
 
-}
-
-int philos_proc_chop_req(void* entity, void* msg)
-{
-
-    return FSM_OK;
 }
 
 int philos_fsm_wait(void* entity, void* msg)
@@ -178,11 +217,6 @@ int philos_fsm_wait(void* entity, void* msg)
         case TIMEOUT_MSG:
             ret = philos_proc_timeout(entity, msg);
             break;
-        case PHILOS_CHOP_REQ:
-            ret = philos_proc_chop_req(entity, msg);
-            break;
-        case PHILOS_CHOP_RESP:
-            ret = proc_chopstick_query_resp(entity, msg);
         default:
             LOG_E("invalid msg[%d]", msgtype);
             break;
@@ -207,10 +241,9 @@ void philos_fsm_constructor(void* entity, fsm_t fsmid)
     phi->exception = fsm_entity_base_exception;
 
     phi->nextjump = philos_fsm_save_info;
+    phi->chops[0] = -1;
+    phi->chops[1] = -1;
 
-    phi->status = THINKING;
-    phi->think_time = 5;
-    phi->eat_time = 3;
 }
 
 void* philos_fsm_create()

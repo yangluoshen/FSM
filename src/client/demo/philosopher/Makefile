@@ -8,7 +8,7 @@ FLAGS+= -DPHI_MDL
 BASE_SRC= $(ROOT_DIR)/src/fsm_base.c $(ROOT_DIR)/src/client/fsm.c  $(ROOT_DIR)/src/client/main.c 
 DEPS_SRC= $(ROOT_DIR)/src/fdict.c $(ROOT_DIR)/src/flist.c $(ROOT_DIR)/src/debug.c
 SRC=
-SRC+= $(BASE_SRC) $(DEPS_SRC) philos_config.c $(ROOT_DIR)/src/client/demo/philosopher/philosfsm.c  phu.c
+SRC+= $(BASE_SRC) $(DEPS_SRC) philos_config.c philosfsm.c chopqueryfsm.c phu.c
 
 phu: $(SRC)
 	$(CC) -g $^  -o $@ -Wall -std=c99 -pedantic $(FLAGS)

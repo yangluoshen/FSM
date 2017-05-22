@@ -4,54 +4,17 @@
 
 #include "main.h"
 #include "debug.h"
+#include "fdict.h"
 
 #include "fsm.h"
+#include "philos_msg.h"
 
-void process_yau_req(void* pmsg);
 
-void proc_fsm_req(msg_t* pmsg)
-{
-    fsm_msg_head* fsm_head = (fsm_msg_head*) pmsg->data;
-    fsm_entity_base* entity = fsm_factory(fsm_head->msgtype, pmsg);
-    if (!entity){
-        LOG_NE("fsm_factory failed");
-        return;
-    }
+fdict* philos_dict = NULL;
+unsigned int philos_count = 0;
 
-    entity->event(entity, pmsg);
+int chopsticks[MAX_CHOPSTICK_NUM] = {CHOP_IDLE};
 
-    if (entity->is_fsm_finish){
-        LOG_D("fsm[%u] finish", entity->fsmid);
-        if (entity->destructor) entity->destructor(entity);
-
-        rmv_fsm_entity(entity->fsmid);
-    }
-
-    LOG_ND("Exit.");
-    return;
-}
-
-void proc_fsm_resp(msg_t* pmsg)
-{
-    fsm_msg_head* fsm_head = (fsm_msg_head*) pmsg->data;
-    fsm_entity_base* entity = get_fsm_entity(fsm_head->fsmid);
-    if (!entity){
-        LOG_NE("get_fsm_entity failed");
-        return;
-    }
-
-    entity->event(entity, pmsg);
-
-    if (entity->is_fsm_finish){
-        LOG_D("fsm[%u], finish", entity->fsmid);
-        if (entity->destructor) entity->destructor(entity);
-
-        rmv_fsm_entity(entity->fsmid);
-    }
-
-    LOG_ND("Exit.");
-    return ;
-}
 
 void proc_rtu(void* data)
 {
@@ -61,4 +24,16 @@ void proc_internal_msg(void* data)
 {
 }
 
+int philos_hash_match(void* ptr, fdict_key_t key)
+{
+    if (!ptr || !key) return 0;
+    philosopher* p = (philosopher*) ptr;
+    return p->whoami == *(int*)key;
+}
 
+size_t philos_hash_calc(fdict* d, fdict_key_t key)
+{
+    if (!d || !key) return -1;
+    int hash = *((int*)key) % d->hash_size;
+    return (size_t)hash;
+}
