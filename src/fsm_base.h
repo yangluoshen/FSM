@@ -34,6 +34,7 @@ typedef struct{
 /** client interface **/
 int fsm_send_msg(const char* fifo_name, const void* pmsg);
 int client_login(module_t mdl);
+void proc_prcs_unreg(void);
 int send_msg(void* m);
 
 enum SendMsgErrNo{

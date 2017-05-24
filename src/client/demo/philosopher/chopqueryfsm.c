@@ -40,12 +40,14 @@ int proc_get_chop(int chop_idx, void* msg)
 
     chopsticks[chop_idx] = chopsticks[chop_idx] == CHOP_IDLE ? CHOP_BUSY : chopsticks[chop_idx];
 
+    LOG_D("Exit. chop[%d], status[%d]", chop_idx, chopsticks[chop_idx]);
     return FSM_OK;
 }
 
 void proc_return_chop(int chop_idx)
 {
     chopsticks[chop_idx] = CHOP_IDLE;
+    LOG_D("Exit. chop[%d], status[%d]", chop_idx, chopsticks[chop_idx]);
 }
 
 int chop_fsm_querystatus(void* entity, void* msg)
@@ -62,6 +64,7 @@ int chop_fsm_querystatus(void* entity, void* msg)
     switch (dowhat){
         case GET:
             ret = proc_get_chop(chop_idx, msg);
+            break;
         case BACK:
             proc_return_chop(chop_idx);
             break;

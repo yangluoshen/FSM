@@ -6,7 +6,7 @@
 
 #define PHILOS_FSM_ENTITY \
     FSM_ENTITY_BASE \
-    int chops[2]; \
+    int chops[2];  /*0 is left chopstick, 1 is right chopstick*/\
     philosopher* philos;
 
 typedef struct philosfsm{

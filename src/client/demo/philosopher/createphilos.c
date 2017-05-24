@@ -9,8 +9,8 @@
 
 static philosopher philos_pool[] = 
 {
-    {0,THINKING,3,4,"Allen"},
-    {1,THINKING,4,3,"Fizz"},
+    {0,THINKING,3,5,"Allen"},
+    {1,THINKING,5,5,"Fizz"},
     {2,THINKING,5,3,"Maria"},
     {3,THINKING,5,4,"Mike"},
     {4,THINKING,3,4,"Eric"},
@@ -38,7 +38,6 @@ msg_t* pack_msg(int idx)
 
 int main(int argc, char* argv[])
 {
-    printf("%s\n", __func__);
     if (argc != 2){
         printf("Usage: %s [num(2-8)]\n", argv[0]);
         exit(0);
@@ -53,7 +52,7 @@ int main(int argc, char* argv[])
         exit(1);
     }
 
-    sleep(5);
+    sleep(2);
 
     int i;
     for (i=0; i < num; ++i){

@@ -1,6 +1,10 @@
 # FSM
 ----
 
+## [示例](https://github.com/yangluoshen/FSM/tree/master/src/client/demo)
+  - [hello](https://github.com/yangluoshen/FSM/tree/master/src/client/demo/hello)
+  - [philosopher](https://github.com/yangluoshen/FSM/tree/master/src/client/demo/philosopher)
+
 ## 客户端向服务器注册
   * server维护一個名为client_reg的fifo
   * server每次轮询都要先检查client_reg是否有进程加入

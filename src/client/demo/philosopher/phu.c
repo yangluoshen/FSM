@@ -13,7 +13,6 @@
 fdict* philos_dict = NULL;
 unsigned int philos_count = 0;
 
-
 void proc_cru_msg(void* data)
 {
     if (!data) return;

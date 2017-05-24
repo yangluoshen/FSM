@@ -13,6 +13,15 @@ extern module_t ME_MDL;
 extern fdict* philos_dict;
 extern unsigned int philos_count;
 
+void show_addphilos(philosopher* phi);
+void refresh_screen();
+
+void philos_set_status(philosopher* philos, int status)
+{
+    philos->status = status;
+    refresh_screen();
+}
+
 int philos_fsm_wait(void* entity, void* msg);
 int proc_chopstick_query_resp(void* entity, void* msg);
 
@@ -21,10 +30,10 @@ int philos_think(void* entity)
     CVTTO_PHILOS(phi, entity);
     int ret = fsm_entity_start_timer(entity, THINK_TM, phi->philos->think_time);
     if (0 != ret) return FSM_FAIL;
-    phi->philos->status = THINKING;
+    philos_set_status(phi->philos, THINKING);
     phi->nextjump = philos_fsm_wait;
 
-    LOG_D("---%s thinking---", phi->philos->name);
+    LOG_D("---%s thinking---fsmid[%d]", phi->philos->name, phi->fsmid);
     return FSM_OK;
 }
 
@@ -54,6 +63,9 @@ int philos_fsm_save_info(void* entity, void* msg)
     phifsm->philos = phi;
     philos_count += 1;
 
+    // 用于显示
+    show_addphilos(phi);
+
     return  philos_think(entity);
 }
 
@@ -81,18 +93,18 @@ int send_chopstick_query_req(void* entity)
     if (!entity) return FSM_FAIL;
 
     CVTTO_PHILOS(phi, entity);
-    LOG_D("---%s need chopstick---", phi->philos->name);
+    LOG_D("---%s need chopstick---fsmid[%d]", phi->philos->name, phi->fsmid);
     int chop_idx;
     if (phi->chops[0] == -1){
         chop_idx = QUERY_LEFT(phi->philos->whoami);
-        phi->chops[0] = chop_idx;
+        LOG_D("philos[%d] needs left chop[%d]", phi->philos->whoami, chop_idx);
     }
     else if (phi->chops[1] == -1){
         chop_idx = QUERY_RIGHT(phi->philos->whoami);
-        phi->chops[1] = chop_idx;
+        LOG_D("philos[%d] needs right chop[%d]", phi->philos->whoami, chop_idx);
     }
     else {
-        LOG_NE("No need to get chopstick");
+        LOG_E("No need to get chopstick,fsm[%d]", phi->fsmid);
         return FSM_FAIL;
     }
     
@@ -112,9 +124,9 @@ int send_chopstick_query_req(void* entity)
     }
 
     phi->nextjump = proc_chopstick_query_resp;
-    phi->philos->status = BUSY;
+    philos_set_status(phi->philos, BUSY);
 
-    LOG_ND("send chopstick query req success");
+    LOG_D("send chopstick query req success. fsmid[%d]", phi->fsmid);
     return FSM_OK;
 }
 
@@ -123,10 +135,10 @@ int philos_eat(void* entity)
     CVTTO_PHILOS(phi, entity);
     int ret = fsm_entity_start_timer(entity, EAT_TM, phi->philos->eat_time);
     if (0 != ret) return FSM_FAIL;
-    phi->philos->status = EATTING;
+    philos_set_status(phi->philos, EATTING);
     phi->nextjump = philos_fsm_wait;
 
-    LOG_D("---%s eatting---", phi->philos->name);
+    LOG_D("---%s eatting---fsmid[%d]", phi->philos->name, phi->fsmid);
     return FSM_OK;
 }
 
@@ -147,6 +159,7 @@ void send_chop_rollback_req(void* entity)
             exit(1);
         }
         phi->chops[i] = -1;
+        LOG_D("philos[%d] roll back chop[%d], fsmid[%d]", phi->philos->whoami, chop_idx, phi->fsmid);
     }
 }
 
@@ -155,9 +168,10 @@ int proc_chopstick_query_resp(void* entity, void* msg)
 {
     if (!entity || !msg) return FSM_FAIL;
 
+    CVTTO_PHILOS(phi, entity);
     int msgtype = GET_MSGTYPE(msg);
     if (msgtype == TIMEOUT_MSG){
-        LOG_ND("query chopstick timeout");
+        LOG_D("query chopstick timeout. fsmid[%d]", phi->fsmid);
         send_chop_rollback_req(entity);
         philos_think(entity);
         return FSM_OK;
@@ -168,27 +182,30 @@ int proc_chopstick_query_resp(void* entity, void* msg)
 
 
     chop_resp* resp = (chop_resp*) GET_DATA(msg);
-    LOG_D("query chopstick[%d], isok[%d]", resp->chop_idx, resp->isok);
+    LOG_D("query chopstick[%d], isok[%d], fsmid[%d]", resp->chop_idx, resp->isok, phi->fsmid);
 
     if (msgtype != PHILOS_CHOP_RESP){
-        LOG_D("unknow msg[%d]" ,msgtype);
+        LOG_E("unknow msg[%d]" ,msgtype);
         return FSM_OK;
     }
 
     if (1 != resp->isok){
+        LOG_D("philos[%d] get chopstick[%d] failed", phi->philos->whoami, resp->chop_idx); 
         send_chop_rollback_req(entity);
         philos_think(entity);
         return FSM_OK;
     }
     
-    CVTTO_PHILOS(phi, entity);
-    //如果是右手边的筷子拿到，就可以eat了
-    if (resp->chop_idx == phi->chops[1]){
-        LOG_D("---%s get two chopsticks---", phi->philos->name);
+    // 如果左筷子已经有了, 说明这是右筷子
+    if (-1 != phi->chops[0]){
+        //如果是右手边的筷子拿到，就可以eat了
+        LOG_D("---%s get right chopstaicks[%d]---fsmid[%d]", phi->philos->name, resp->chop_idx,phi->fsmid);
+        phi->chops[1] = resp->chop_idx;
         return philos_eat(entity);
     }
     
-    LOG_D("---%s get a chopstick---", phi->philos->name);
+    LOG_D("---%s get a left chopstick[%d]---fsmid[%d]", phi->philos->name, resp->chop_idx, phi->fsmid);
+    phi->chops[0] = resp->chop_idx;
     return send_chopstick_query_req(entity);
 }
 
@@ -201,11 +218,11 @@ int philos_proc_timeout(void* entity, void* msg)
     CVTTO_PHILOS(phi, entity);
     switch(timerid){
         case THINK_TM:
-            LOG_D("---%s hungry---", phi->philos->name);
+            LOG_D("---%s hungry---fsmid[%d]", phi->philos->name, phi->fsmid);
             ret = send_chopstick_query_req(entity);
             break;
         case EAT_TM:
-            LOG_D("---%s full---", phi->philos->name);
+            LOG_D("---%s full---fsmid[%d]", phi->philos->name, phi->fsmid);
             // eat结束之后,需将筷子放回
             send_chop_rollback_req(entity);
             ret = philos_think(entity);

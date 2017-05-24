@@ -10,6 +10,7 @@
 #include <errno.h>
 #include <time.h>
 #include <sys/timerfd.h>
+#include <stdlib.h>
 
 #include "msg.h"
 #include "fsm.h"
@@ -17,6 +18,10 @@
 #include "fdict.h"
 
 #include "main.h"
+
+#ifdef PHI_MDL
+#include <curses.h>
+#endif
 
 #define CLOG_MAIN
 #include "debug.h"
@@ -162,6 +167,23 @@ int log_init()
     return 0;
 }
 
+
+void finish()
+{
+    proc_prcs_unreg();
+    remove_cl_fifo();
+
+#ifdef PHI_MDL
+    endwin();
+#endif
+
+}
+
+void sig_handler(int sig)
+{
+    finish();
+}
+
 int initialize()
 {
     if (-1 == client_login(ME_MDL)) return -1;
@@ -169,6 +191,14 @@ int initialize()
     if (-1 == timer_init()) return -1;
     if (-1 == log_init()) return -1;
     if (-1 == fsm_driver_init()) return -1;
+    
+    if (signal(SIGINT, sig_handler) == SIG_ERR) return -1;
+    if (signal(SIGQUIT, sig_handler) == SIG_ERR) return -1;
+
+#ifdef PHI_MDL
+    initscr();
+    atexit(finish);
+#endif
 
     return 0;
 }
