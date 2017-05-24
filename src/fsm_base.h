@@ -33,6 +33,8 @@ typedef struct{
 
 /** client interface **/
 int fsm_send_msg(const char* fifo_name, const void* pmsg);
+int client_login(module_t mdl);
+int send_msg(void* m);
 
 enum SendMsgErrNo{
     SM_OK = 0,
@@ -53,6 +55,7 @@ enum E_MODULE_TYPE{
 	BYU,
     PHU,
     RTU,
+    CRU,
 
 	UKU    /*unknown unit*/
 };

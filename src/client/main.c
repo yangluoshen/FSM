@@ -79,6 +79,7 @@ void* read_fifo(int fd)
     return buf;
 }
 
+/*
 int gen_fifo(const char* name, int mode)
 {
     umask(0);
@@ -94,14 +95,7 @@ ERR:
     perror("generate fifo failed");
     return -1;
 }
-
-int client_login()
-{
-    int ret = proc_prcs_reg(ME_MDL);
-    if (ret != 0) return -1;
-    atexit(proc_prcs_unreg);
-    return ret;
-}
+*/
 
 int epoll_init()
 {
@@ -170,7 +164,7 @@ int log_init()
 
 int initialize()
 {
-    if (-1 == client_login()) return -1;
+    if (-1 == client_login(ME_MDL)) return -1;
     if (-1 == epoll_init()) return -1;
     if (-1 == timer_init()) return -1;
     if (-1 == log_init()) return -1;
@@ -381,35 +375,5 @@ msg_t* pack_timeout_msg(fsm_timer* ft)
     t->timerid = ft->timerid;
 
     return m;
-}
-
-/* send a msg to server */
-int send_msg(void* m)
-{
-    char sv_fifo_name[FIFO_NAME_LEN] = {0};
-
-    msg_t* pmsg = (msg_t*)m;
-
-    GEN_SV_NAME(sv_fifo_name, pmsg->s_pid);
-    return fsm_send_msg(sv_fifo_name, m);
-}
-
-int proc_prcs_reg(module_t type)
-{
-    prcs_reg reg;
-    reg.cmd = PRCS_REG;
-    reg.pid = getpid();
-    reg.mdl = type;
-
-    return __send_request(SV_REG_FIFO, &reg, sizeof(reg));
-}
-
-void proc_prcs_unreg(void)
-{
-    prcs_reg reg;
-    reg.cmd = PRCS_UNREG;
-    reg.pid = getpid();
-
-    (void)__send_request(SV_REG_FIFO, &reg, sizeof(reg));
 }
 

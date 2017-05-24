@@ -139,7 +139,7 @@ void fsm_entity_base_destructor(void* entity);
 void fsm_entity_timer_init(void* entity);
 void fsm_base_event(void* entity, void* msg);
 int fsm_entity_start_timer(void* entity, int timerid, time_t seconds);
-void fsm_entity_stop_timer(void* entity, int timerfd);
+void fsm_entity_stop_timer(void* entity, int timerid);
 
 void fsm_entity_base_constructor(void* entity, fsm_t fsmid)
 {
@@ -167,8 +167,8 @@ void fsm_base_event(void* entity, void* msg)
     int msgtype = GET_MSGTYPE(msg);
     if (msgtype == TIMEOUT_MSG){
         LOG_D("get a time out msg [%d]", msgtype);
-        int timerfd = GET_TIMERFD(msg);
-        fsm_entity_stop_timer(entity, timerfd);
+        int timerid = GET_TIMERID(msg);
+        fsm_entity_stop_timer(entity, timerid);
     }
 
     if (!base->nextjump){
@@ -194,23 +194,27 @@ void fsm_entity_timer_init(void* entity)
     if (!entity) return;
     CVTTO_BASE(be, entity);
     int i;
-    for (i = 0; i < MAX_ENTITY_TIMER_NUM; ++i)
-        be->timer_list[i] = 0;
+    for (i = 0; i < MAX_ENTITY_TIMER_NUM; ++i){
+        be->timer_list[i].id = -1;
+        be->timer_list[i].fd = -1;
+    }
 }
 
-int fsm_entity_set_timer(void* entity, int timerfd)
+int fsm_entity_set_timer(void* entity,int timerid, int timerfd)
 {
     if (!entity) return -1;
     CVTTO_BASE(be, entity);
 
     int i;
     for (i = 0; i < MAX_ENTITY_TIMER_NUM; ++i){
-        if (be->timer_list[i] == 0){
-            be->timer_list[i] = timerfd;
+        if (be->timer_list[i].fd == -1){
+            be->timer_list[i].fd = timerfd;
+            be->timer_list[i].id = timerid;
             return 0;
         }
     }
 
+    LOG_E("set timer[%d] failed", timerid);
     return -1;
 }
 
@@ -224,10 +228,11 @@ void fsm_entity_base_destructor(void* entity)
     // stop all timers
     int i;
     for (i = 0; i < MAX_ENTITY_TIMER_NUM; ++i){
-        if (!be->timer_list[i]) continue;
+        if (-1 == be->timer_list[i].fd) continue;
 
-        stop_timer(be->timer_list[i]);
-        be->timer_list[i] = 0;
+        stop_timer(be->timer_list[i].fd);
+        be->timer_list[i].fd = -1;
+        be->timer_list[i].id = -1;
     }
 
 }
@@ -247,25 +252,27 @@ int fsm_entity_start_timer(void* entity, int timerid, time_t seconds)
         }
     }
 
-    if (-1 == fsm_entity_set_timer(entity, tfd)){
+    if (-1 == fsm_entity_set_timer(entity, timerid, tfd)){
         close(tfd);
         return -1;
     }
     
-    LOG_D("start timer success,timerfd[%d]", tfd);
+    LOG_D("start timer success,timerid[%d]", timerid);
     return 0;
 }
 
-void fsm_entity_stop_timer(void* entity, int timerfd)
+void fsm_entity_stop_timer(void* entity, int timerid)
 {
     if (!entity) return ;
     CVTTO_BASE(be, entity);
     
     int i = 0;
     for (i = 0; i < MAX_ENTITY_TIMER_NUM; ++i){
-        if (timerfd == be->timer_list[i]){
-            be->timer_list[i] = 0;
-            stop_timer(timerfd);
+        if (timerid == be->timer_list[i].id){
+            stop_timer(be->timer_list[i].fd);
+            be->timer_list[i].id = -1;
+            be->timer_list[i].fd = -1;
+            LOG_D("timer[%d] has been stop", timerid);
             return ;
         }
     }

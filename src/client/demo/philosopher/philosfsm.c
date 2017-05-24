@@ -24,6 +24,7 @@ int philos_think(void* entity)
     phi->philos->status = THINKING;
     phi->nextjump = philos_fsm_wait;
 
+    LOG_D("---%s thinking---", phi->philos->name);
     return FSM_OK;
 }
 
@@ -45,6 +46,7 @@ int philos_fsm_save_info(void* entity, void* msg)
     memcpy (phi, GET_DATA(msg), sizeof (philosopher));
     if (FDICT_SUCCESS != fdict_insert(philos_dict, &phi->whoami, phi)){
         LOG_NE("insert philosopher to dict failed");
+        free(phi);
         return FSM_FAIL;
     }
     CVTTO_PHILOS(phifsm, entity);
@@ -79,6 +81,7 @@ int send_chopstick_query_req(void* entity)
     if (!entity) return FSM_FAIL;
 
     CVTTO_PHILOS(phi, entity);
+    LOG_D("---%s need chopstick---", phi->philos->name);
     int chop_idx;
     if (phi->chops[0] == -1){
         chop_idx = QUERY_LEFT(phi->philos->whoami);
@@ -123,6 +126,7 @@ int philos_eat(void* entity)
     phi->philos->status = EATTING;
     phi->nextjump = philos_fsm_wait;
 
+    LOG_D("---%s eatting---", phi->philos->name);
     return FSM_OK;
 }
 
@@ -155,8 +159,13 @@ int proc_chopstick_query_resp(void* entity, void* msg)
     if (msgtype == TIMEOUT_MSG){
         LOG_ND("query chopstick timeout");
         send_chop_rollback_req(entity);
+        philos_think(entity);
         return FSM_OK;
     }
+
+    // stop timer
+    fsm_entity_stop_timer(entity, QUERY_CHOP_TM);
+
 
     chop_resp* resp = (chop_resp*) GET_DATA(msg);
     LOG_D("query chopstick[%d], isok[%d]", resp->chop_idx, resp->isok);
@@ -175,9 +184,11 @@ int proc_chopstick_query_resp(void* entity, void* msg)
     CVTTO_PHILOS(phi, entity);
     //如果是右手边的筷子拿到，就可以eat了
     if (resp->chop_idx == phi->chops[1]){
+        LOG_D("---%s get two chopsticks---", phi->philos->name);
         return philos_eat(entity);
     }
     
+    LOG_D("---%s get a chopstick---", phi->philos->name);
     return send_chopstick_query_req(entity);
 }
 
@@ -187,11 +198,14 @@ int philos_proc_timeout(void* entity, void* msg)
 
     int ret = FSM_FAIL;
     int timerid = GET_TIMERID(msg);
+    CVTTO_PHILOS(phi, entity);
     switch(timerid){
         case THINK_TM:
+            LOG_D("---%s hungry---", phi->philos->name);
             ret = send_chopstick_query_req(entity);
             break;
         case EAT_TM:
+            LOG_D("---%s full---", phi->philos->name);
             // eat结束之后,需将筷子放回
             send_chop_rollback_req(entity);
             ret = philos_think(entity);
@@ -244,6 +258,7 @@ void philos_fsm_constructor(void* entity, fsm_t fsmid)
     phi->chops[0] = -1;
     phi->chops[1] = -1;
 
+    phi->philos = NULL;
 }
 
 void* philos_fsm_create()

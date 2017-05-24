@@ -2,7 +2,12 @@
 #define __FSM_H
 
 #include "fsm_base.h"
-#include "adlist.h"
+
+// 记录自动机中timerid与timerfd的映射关系
+typedef struct {
+    int id;
+    int fd;
+}timer_node;
 
 #define MAX_ENTITY_TIMER_NUM (20)
 typedef void  (*fsm_constructor)(void* entity, fsm_t fsmid);
@@ -19,7 +24,7 @@ typedef void  (*fsm_event)(void* entity, void* msg);
     fsm_nextjump_func nextjump;\
     fsm_exception exception;\
     fsm_t fsmid;\
-    int timer_list[MAX_ENTITY_TIMER_NUM];\
+    timer_node timer_list[MAX_ENTITY_TIMER_NUM];\
     char is_fsm_finish;
 
 typedef struct __tag_fsm_entity_base{

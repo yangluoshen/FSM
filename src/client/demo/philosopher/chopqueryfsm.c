@@ -12,8 +12,7 @@
 extern module_t ME_MDL;
 extern fdict* philos_dict;
 extern unsigned int philos_count;
-extern int* chopsticks;
-
+int chopsticks[MAX_CHOPSTICK_NUM] = {CHOP_IDLE};
 
 
 int proc_get_chop(int chop_idx, void* msg)

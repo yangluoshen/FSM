@@ -14,7 +14,6 @@ void cache_fsm_destructor(void* entity);
 int cache_fsm_req(void* entity, void* data);
 int cache_fsm_query(void* entity, void* msg);
 void cache_fsm_exception(void* entity);
-void cache_event(void* entity, void* msg);
 
 void cache_fsm_constructor(void* entity, fsm_t fsmid)
 {
@@ -28,38 +27,10 @@ void cache_fsm_constructor(void* entity, fsm_t fsmid)
     CVTTO_CACHE(cache_en, entity);
     cache_en->constructor = cache_fsm_constructor;
     cache_en->destructor = cache_fsm_destructor;
-    cache_en->event = cache_event;
     cache_en->nextjump = cache_fsm_req;
     cache_en->exception = cache_fsm_exception;
 
     cache_en->key = 1;
-}
-
-void cache_event(void* entity, void* msg)
-{
-    if (!entity || !msg){
-        LOG_E("parameters entity[%p] or msg[%p] is null", entity, msg);
-        return ;
-    }
-    CVTTO_CACHE(cache_en, entity);
-
-    //timer should be cancled here
-
-    if(!cache_en->nextjump){
-        LOG_NE("nextjump is null");
-        fsm_set_fsm_finish(entity);
-        if (cache_en->exception)
-            cache_en->exception(entity);
-        return ;
-    }
-    int ret = cache_en->nextjump(entity, msg);
-    if (FSM_OK != ret){
-        LOG_E("next jump failed[%d]", ret);
-        if (cache_en->exception)
-            cache_en->exception(entity);
-    }
-
-    return;
 }
 
 void* cache_fsm_create()
@@ -91,7 +62,7 @@ int cache_fsm_req(void* entity, void* msg)
     req_t* preq = (req_t*) fsm_head->data;
 
     LOG_D("what:%s, peer fsmid[%u], my fsmid[%u], msgtype[%d]", preq->what, preq->src_fsmid, ((cache_fsm*)entity)->fsmid, fsm_head->msgtype);
-    printf("what:%s, peer fsmid[%u], my fsmid[%u]\n", preq->what, preq->src_fsmid, ((cache_fsm*)entity)->fsmid);
+    printf("yau:%s\n", preq->what);
     chat_yau_resp((cache_fsm*)entity, fsm_head->fsmid, data->s_pid, data->s_mdl);
     
     CVTTO_CACHE(cache_en, entity);
@@ -112,7 +83,7 @@ int cache_fsm_query(void* entity, void* msg)
     req_t* preq = (req_t*) fsm_head->data;
 
     LOG_D("what:%s, peer fsmid[%u], my fsmid[%u],msg_type[%d]", preq->what, preq->src_fsmid, ((cache_fsm*)entity)->fsmid, fsm_head->msgtype);
-    printf("what:%s, peer fsmid[%u], my fsmid[%u]\n", preq->what, preq->src_fsmid, ((cache_fsm*)entity)->fsmid);
+    printf("yau:%s\n", preq->what);
 
     chat_yau_resp_again((cache_fsm*)entity, fsm_head->fsmid, data->s_pid, data->s_mdl);
     fsm_set_fsm_finish(entity);

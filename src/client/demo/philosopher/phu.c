@@ -13,15 +13,41 @@
 fdict* philos_dict = NULL;
 unsigned int philos_count = 0;
 
-int chopsticks[MAX_CHOPSTICK_NUM] = {CHOP_IDLE};
 
-
-void proc_rtu(void* data)
+void proc_cru_msg(void* data)
 {
+    if (!data) return;
+    int msgtype = GET_MSGTYPE(data);
+    LOG_D("msgtype[%d]", msgtype);
+    switch(msgtype){
+        case  PHILOS_CREATE_REQ:
+            proc_fsm_req((msg_t*)data);
+            break;
+        default:
+            LOG_E("unknown msg[%d]", msgtype);
+            break;
+    }
+    return;
 }
 
 void proc_internal_msg(void* data)
 {
+    if (!data) return;
+    int msgtype = GET_MSGTYPE(data);
+    LOG_D("msgtype[%d]", msgtype);
+    switch(msgtype){
+        case TIMEOUT_MSG:
+        case PHILOS_CHOP_RESP:
+            proc_fsm_resp((msg_t*)data);
+            break;
+        case PHILOS_CHOP_REQ:
+            proc_fsm_req((msg_t*)data);
+            break;
+        default:
+            LOG_E("unknown msg[%d]", msgtype);
+            break;
+    }
+    return;
 }
 
 int philos_hash_match(void* ptr, fdict_key_t key)

@@ -5,13 +5,13 @@
 
 const module_t ME_MDL = PHU;
 
-//void proc_rtu(void* pmsg);
+void proc_cru_msg(void* pmsg);
 void proc_internal_msg(void* pmsg);
 
 // 模块消息路由表. 根据不同模块路由给不同的处理函数入口
 msg_driver_node g_msg_driver[] = 
 {
-    //{RTU, proc_rtu},
+    {CRU, proc_cru_msg},
     {PHU, proc_internal_msg}
 
 };

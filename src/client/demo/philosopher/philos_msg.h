@@ -7,13 +7,6 @@
 #define MAX_PHILOS_NUM (20)
 #define MAX_CHOPSTICK_NUM (100)
 
-/*
-typedef struct philos_create_req{
-    int think_time;
-    int eat_time;
-    int whoami;
-}philos_create_req;
-*/
 
 typedef struct chop_req{
     int chop_idx;

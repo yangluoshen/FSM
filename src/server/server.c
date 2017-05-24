@@ -166,8 +166,8 @@ void process_reg(const prcs_reg* preg)
     // append reg_list
     if (NULL == listAddNodeTail(reg_list, pi)) goto RELEASE ;
 
-    printf("process[%d] register successfully\n", preg->pid);
-    LOG_D("process[%d] register successfully", preg->pid);
+    printf("process[%d] mdl[%lu] register successfully\n", preg->pid, preg->mdl);
+    LOG_D("process[%d] mdl[%lu] register successfully", preg->pid, preg->mdl);
 
     return;
 
