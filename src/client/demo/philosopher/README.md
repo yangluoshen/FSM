@@ -18,6 +18,7 @@
 哲学家获得筷子之后都会在一定时间之后归还。<br> 
 与原来的哲学家就餐问题不同，这种机制下，理论上不会造成死锁。</p>
 <img src="../../../../doc/philosopher.jpg"/>
+
 ![Go to definition](../../../../doc/philos.gif)
 
 ## cru
