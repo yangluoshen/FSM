@@ -16,6 +16,8 @@
 #include "fsm.h"
 #include "adlist.h"
 #include "fdict.h"
+#include "ae.h"
+#include "anet.h"
 
 #include "main.h"
 
@@ -23,24 +25,19 @@
 #include <curses.h>
 #endif
 
+#define MAX_EV_NUM (1024)
+
 #define CLOG_MAIN
 #include "debug.h"
 const int G_LOGGER = 0;
 
 static fdict* timer_dict;
 list* g_fsm_driver;
-
-static char client_fifo [FIFO_NAME_LEN];
-const int epoll_size = 32;
-
-int g_client_epfd;
-static int dummy_clfd;
+static int curr_ev_fd = -1;
 
 /* client base essential */
-int proc_prcs_reg(module_t type);
-void proc_prcs_unreg(void);
 int __send_request(const char* name, const void* msg, size_t len);
-void custome_processing(int fd);
+void custome_processing(msg_t*);
 
 /* timer declearation */
 int timer_hash_match(void* ptr, fdict_key_t key);
@@ -49,93 +46,23 @@ int gen_real_timer(time_t sec, int isloop);
 fsm_timer* get_timer(int fd);
 msg_t* pack_timeout_msg(fsm_timer* ft);
 
-
-
 extern const module_t ME_MDL;
+extern const int ME_PORT;
 extern const size_t FSM_DRIVER_SZ;
 extern const int FSM_CLIENT_EPOLL_TIMEOUT;
 
 
-void remove_cl_fifo()
-{
-    unlink(client_fifo);
-}
+#define SET_CURR_EVFD(fd) do {curr_ev_fd = (fd);}while(0)
+#define RESET_CURR_EVFD() do {curr_ev_fd = -1;}while(0)
 
-// read_fifo do not care what the data content is
-void* read_fifo(int fd)
-{
-    /* read msg head first */
-    msg_t msg;
-    if (read(fd, &msg, MSG_HEAD_LEN) != MSG_HEAD_LEN){
-        perror("client read response failed");
-        return NULL;
-    }
+struct {
+    int sv_fd;
+    int port;
+    int backlog;
+    aeEventLoop* el;
+    char neterr[255];
+}server;
 
-    size_t msg_len = MSG_HEAD_LEN + msg.data_len;
-    char* buf = (char*) malloc(msg_len);
-    if (!buf) return  NULL;
-    memcpy(buf, &msg, MSG_HEAD_LEN);
-
-    if (read(fd, ((msg_t*)buf)->data, msg.data_len) != msg.data_len){
-        perror("client: Error reading resp");
-        return NULL;
-    }
-
-    return buf;
-}
-
-/*
-int gen_fifo(const char* name, int mode)
-{
-    umask(0);
-    if (-1 == mkfifo(name, S_IRUSR|S_IWUSR|S_IWGRP) &&
-            EEXIST != errno) goto ERR;
-    
-    int fd = open(name, mode);
-    if(-1 == fd) goto ERR;
-
-    return fd;
-    
-ERR:
-    perror("generate fifo failed");
-    return -1;
-}
-*/
-
-int epoll_init()
-{
-    snprintf(client_fifo, FIFO_NAME_LEN, CL_FIFO_TPL, getpid());
-
-    umask(0);
-    /*while read msg, client will read from client_fifo*/
-    if (mkfifo(client_fifo, S_IRUSR|S_IWUSR|S_IWGRP) == -1 &&
-        EEXIST != errno){
-        perror("client mkfifo failed");
-        return -1;
-    }
-    atexit(remove_cl_fifo);
-    
-    int cl_fd = open(client_fifo, O_RDONLY|O_NONBLOCK);
-    if (-1 == cl_fd) return -1;
-    /* dummy_clfd is essential. 
-     * if not define dummy_clfd (in write only), 
-     * read fifo will throw failed while server close its write file descriptor*/
-    dummy_clfd = open(client_fifo, O_WRONLY);
-    if (-1 == dummy_clfd) return -1;
-
-    /* add cl_fd to epoll */
-    g_client_epfd = epoll_create(epoll_size);
-    if (-1 == g_client_epfd) return -1;
-    
-    struct epoll_event ev;
-    ev.events = EPOLLIN;
-    ev.data.fd = cl_fd; 
-    if (epoll_ctl(g_client_epfd, EPOLL_CTL_ADD, cl_fd, &ev) == -1)
-        return -1;
-
-    return 0;
-
-}
 
 int timer_init()
 {
@@ -167,33 +94,124 @@ int log_init()
     return 0;
 }
 
-
 void finish()
 {
-    proc_prcs_unreg();
-    remove_cl_fifo();
-
 #ifdef PHI_MDL
     endwin();
 #endif
-
 }
 
 void sig_handler(int sig)
 {
     finish();
+    exit(0);
+}
+
+void free_conn(int fd, int mask)
+{
+    aeDeleteFileEvent(server.el, fd, mask);
+    close(fd);
+}
+
+void _timeout_handle(struct aeEventLoop *eventLoop, int fd, void *clientData, int mask)
+{
+    (void)eventLoop;(void)clientData;(void)mask;
+    fsm_timer* t = get_timer(fd);
+    if (!t) goto end;
+
+    msg_t* m = pack_timeout_msg(t);
+    if (!m) goto end;
+
+    SET_CURR_EVFD(fd);
+    custome_processing(m);
+
+    free(m);
+end:
+    stop_timer(fd);
+    RESET_CURR_EVFD();
+    return;
+}
+
+// bug: 考虑到字节序问题，这种读socket的方式当放在网际通信是有问题的。
+void* _get_msg(int fd)
+{
+    msg_t msg;
+    if (read(fd, &msg, MSG_HEAD_LEN) != MSG_HEAD_LEN){
+        LOG_ND("read req head failed");
+        return NULL;
+    }
+    msg.ev_fd = fd;
+
+    size_t msg_len = MSG_HEAD_LEN + msg.data_len; 
+    char* buf = (char*) malloc(msg_len);
+    if (!buf) return NULL;
+    memcpy (buf, &msg, MSG_HEAD_LEN);
+
+    if (read(fd, ((msg_t*)buf)->data, msg.data_len)!=msg.data_len){
+        perror("read req's data failed");
+        free (buf);
+        return NULL;
+    }
+    
+    return buf;
+}
+
+void _msg_handle(struct aeEventLoop *eventLoop, int fd, void *clientData, int mask)
+{
+    (void)eventLoop;(void)clientData;
+
+    msg_t* msg = (msg_t*) _get_msg(fd);
+    if (!msg) goto end;
+
+    SET_CURR_EVFD(fd);
+    custome_processing(msg);
+    free(msg);
+end:
+    free_conn(fd, mask);
+    RESET_CURR_EVFD();
+    return;
+}
+
+void _accept_handle(struct aeEventLoop *eventLoop, int fd, void *clientData, int mask)
+{
+    (void)eventLoop;(void)clientData;(void)mask;
+    int conn_fd = anetTcpAccept(server.neterr, fd, NULL, 0, NULL); 
+    if (ANET_ERR == conn_fd) return;
+
+    anetNonBlock(NULL, conn_fd);
+
+    if (ANET_ERR == aeCreateFileEvent(server.el, conn_fd, AE_READABLE, _msg_handle, NULL)){
+        exit(0);
+    }
+}
+
+int el_init()
+{
+    server.el = aeCreateEventLoop(MAX_EV_NUM);
+    server.port = ME_PORT;
+    server.backlog = 100;
+    server.sv_fd = anetTcpServer(server.neterr, server.port, NULL, server.backlog);
+    if (ANET_ERR == server.sv_fd) return -1;
+    
+    anetNonBlock(NULL, server.sv_fd);
+    
+    if (ANET_ERR == aeCreateFileEvent(server.el, server.sv_fd, AE_READABLE, _accept_handle, NULL))
+        return -1;
+
+    return 0;
 }
 
 int initialize()
 {
-    if (-1 == client_login(ME_MDL)) return -1;
-    if (-1 == epoll_init()) return -1;
     if (-1 == timer_init()) return -1;
     if (-1 == log_init()) return -1;
     if (-1 == fsm_driver_init()) return -1;
+    if (-1 == el_init()) return -1;
     
     if (signal(SIGINT, sig_handler) == SIG_ERR) return -1;
     if (signal(SIGQUIT, sig_handler) == SIG_ERR) return -1;
+    /*ignore SIGPIPE while there is no server reader*/
+    if (SIG_ERR == signal(SIGPIPE, SIG_IGN)) return -1;
 
 #ifdef PHI_MDL
     initscr();
@@ -203,9 +221,6 @@ int initialize()
     return 0;
 }
 
-#ifdef YAU_MDL
-void say_hello_to_ttu();
-#endif
 int main(int argc, char* argv[])
 {
     if (0 != initialize()){
@@ -213,53 +228,17 @@ int main(int argc, char* argv[])
         return -1;
     }
 
-    /*ignore SIGPIPE while there is no server reader*/
-    if (SIG_ERR == signal(SIGPIPE, SIG_IGN)) return -1;
-
-    struct epoll_event ev_list[epoll_size];
-    while (1){
-        int ready = epoll_wait(g_client_epfd, ev_list, epoll_size, FSM_CLIENT_EPOLL_TIMEOUT);
-        if (-1 == ready){
-            perror("epoll_wait");
-            continue;
-        }
-        int i;
-        for (i = 0; i < ready; ++i){
-            if(ev_list[i].events & EPOLLIN){
-                custome_processing(ev_list[i].data.fd);
-                continue;
-            }else if (ev_list[i].events & (EPOLLHUP | EPOLLERR)){
-                perror("read ev_list");
-                return -1; 
-            }
-        }
-// just for debug
-#ifdef YAU_MDL
-        static int count = 0;
-        if (count++ == 0)
-            say_hello_to_ttu();
-#endif
-    }
+    aeMain(server.el);
 
     return 0;
 }
 
-void custome_processing(int fd)
+void custome_processing(msg_t* pmsg)
 {
-    msg_t *pmsg;
-    // 如果是超时消息, 需特殊处理
-    fsm_timer* ft = get_timer(fd);
-    if (ft){
-        LOG_ND("get timeout msg");
-        pmsg = pack_timeout_msg(ft);
-    }
-    else{
-        pmsg = (msg_t*)read_fifo(fd);
-    }
-
-    module_t type = pmsg->s_mdl;
+    if (!pmsg) return;
 
     int i;
+    module_t type = pmsg->s_mdl;
     for (i = 0; i < FSM_DRIVER_SZ; ++i){
         const msg_driver_node* node = get_driver_node(i);
         if (!node) continue;
@@ -271,8 +250,6 @@ void custome_processing(int fd)
             break;
         }
     }
-    
-    free(pmsg);
 }
 
 /************** Timer ********************/
@@ -335,27 +312,22 @@ int start_timer(int timerid, fsm_t fsmid, time_t seconds)
         close(tfd);
         return -1;
     }
-    
-    // insert into epoll and polling
-    struct epoll_event ev;
-    ev.events = EPOLLIN;
-    ev.data.fd = tfd;
-    if (epoll_ctl(g_client_epfd, EPOLL_CTL_ADD, tfd, &ev) == -1){
-        perror("start timer failed\n");
-        close(tfd);
-        free(ft);
-        return -1;
-    }
-    
     // append this timer to timerlist so that we can find it while it is stopped
     ft->timerid = timerid;
     ft->timerfd = tfd;
     ft->fsmid = fsmid;
+
+    if (ANET_ERR == aeCreateFileEvent(server.el, tfd, AE_READABLE, _timeout_handle, NULL)) {
+        close(tfd);
+        free(ft);
+        return -1;
+    }
+
     if (FDICT_SUCCESS != fdict_insert(timer_dict, &ft->timerfd, ft)){
         LOG_NE("fdict_insert failed");
         close(tfd);
         free(ft);
-        epoll_ctl(g_client_epfd, EPOLL_CTL_DEL, tfd, NULL);
+        aeDeleteFileEvent(server.el, tfd, AE_READABLE);
         return -1;
     }
 
@@ -369,7 +341,8 @@ void stop_timer(int timerfd)
     fsm_timer* ft = (fsm_timer*) fdict_find(timer_dict, &timerfd);
     if (!ft) return;
 
-    (void) epoll_ctl(g_client_epfd, EPOLL_CTL_DEL, ft->timerfd, NULL);
+    aeDeleteFileEvent(server.el, timerfd, AE_READABLE);
+
     close(timerfd);
     (void)fdict_remove(timer_dict, &timerfd);
 
@@ -393,6 +366,7 @@ msg_t* pack_timeout_msg(fsm_timer* ft)
     m->r_pid = getpid();
     m->s_mdl = ME_MDL;
     m->r_mdl = ME_MDL;
+    m->ev_fd = ft->timerfd;
     m->data_len = data_len;
 
     fsm_msg_head* fh = (fsm_msg_head*) m->data;
@@ -407,3 +381,13 @@ msg_t* pack_timeout_msg(fsm_timer* ft)
     return m;
 }
 
+int send_msg(void* m)
+{
+    if (-1==curr_ev_fd || !m) return SM_FAILED;
+    msg_t* pmsg = (msg_t*)m;
+    size_t msg_len = MSG_HEAD_LEN + pmsg->data_len;
+    if (write(curr_ev_fd, m, msg_len) != msg_len)
+        return SM_FAILED;
+
+    return SM_OK;
+}

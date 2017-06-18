@@ -2,6 +2,7 @@
 #include "main.h"
 
 const module_t ME_MDL = YAU;  /* the module type you want */
+const int ME_PORT = 5702;
 
 
 void process_ttu_req(void* pmsg);

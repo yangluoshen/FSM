@@ -1,4 +1,4 @@
-#include "fsm_base.h"
+#include "main.h"
 #include "philos_msg.h"
 #include "fsm.h"
 #include <malloc.h>

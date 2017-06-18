@@ -1,7 +1,7 @@
 #ifndef __FSM_H
 #define __FSM_H
 
-#include "fsm_base.h"
+#include "main.h"
 
 // 记录自动机中timerid与timerfd的映射关系
 typedef struct {

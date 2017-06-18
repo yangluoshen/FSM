@@ -3,10 +3,7 @@
 
 #include <stdio.h>
 #include <unistd.h>
-
-#include "fsm_base.h"
-
-
+#include "main.h"
 
 /**** utilities ****/
 #define swap(A, B) ({  __typeof__(A) __a = (A); __typeof__(B) __b = (B); __a ^= __b; __b ^= __a; __a ^= __b;})
@@ -31,9 +28,5 @@
 				((resp_t*)(__resp))->msg_type, ((resp_t*)(__resp))->err_code);\
 	}while(0)
 
-#define print_reg_info(__reg) \
-    do {\
-        printf("cmd[%d], pid[%d], module[%lu]\n",((prcs_reg*)__reg)->cmd, ((prcs_reg*)__reg)->pid,((prcs_reg*)__reg)->mdl);\
-    }while(0) 
 
 #endif

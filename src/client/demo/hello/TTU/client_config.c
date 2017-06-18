@@ -4,6 +4,7 @@
 #include "ttu_yau_msg.h"
 
 const module_t ME_MDL = TTU;  /* the module type you want */
+const int ME_PORT = 5701;
 
 void process_yau_req(void* pmsg);
 void proc_ttu_internal_msg(void* data);

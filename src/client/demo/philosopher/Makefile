@@ -5,7 +5,7 @@ FLAGS+= -L$(ROOT_DIR)/deps/adlist/
 FLAGS+= -ladlist -lncurses
 FLAGS+= -DPHI_MDL
 
-BASE_SRC= $(ROOT_DIR)/src/fsm_base.c $(ROOT_DIR)/src/client/fsm.c  $(ROOT_DIR)/src/client/main.c 
+BASE_SRC= $(ROOT_DIR)/src/client/fsm.c  $(ROOT_DIR)/src/client/main.c 
 DEPS_SRC= $(ROOT_DIR)/src/fdict.c $(ROOT_DIR)/src/flist.c $(ROOT_DIR)/src/debug.c
 SRC=
 SRC+= $(BASE_SRC) $(DEPS_SRC) philos_config.c philosfsm.c chopqueryfsm.c show.c phu.c
@@ -15,7 +15,7 @@ all: phu cru
 phu: $(SRC)
 	$(CC) -g $^ -o $@ -Wall -std=c99 -pedantic $(FLAGS)
 
-cru: $(ROOT_DIR)/src/fsm_base.c createphilos.c
+cru: createphilos.c
 	$(CC) -g $^ -o $@ -Wall -std=c99 -pedantic -I$(ROOT_DIR)/src/ -I$(ROOT_DIR)/src/client/ 
 
 

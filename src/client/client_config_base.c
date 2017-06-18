@@ -1,6 +1,7 @@
 #include "client_config.h"
 
 const module_t ME_MDL = TTU;  /* the module type you want */
+const int ME_PORT = 5700;
 
 void process_yau_req(void* pmsg);
 
