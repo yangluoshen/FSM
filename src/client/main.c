@@ -130,41 +130,34 @@ end:
 }
 
 // bug: 考虑到字节序问题，这种读socket的方式当放在网际通信是有问题的。
-void* _get_msg(int fd)
-{
-    msg_t msg;
-    if (read(fd, &msg, MSG_HEAD_LEN) != MSG_HEAD_LEN){
-        LOG_ND("read req head failed");
-        return NULL;
-    }
-
-    size_t msg_len = MSG_HEAD_LEN + msg.data_len; 
-    char* buf = (char*) malloc(msg_len);
-    if (!buf) return NULL;
-    memcpy (buf, &msg, MSG_HEAD_LEN);
-
-    if (read(fd, ((msg_t*)buf)->data, msg.data_len)!=msg.data_len){
-        perror("read req's data failed");
-        free (buf);
-        return NULL;
-    }
-    
-    return buf;
-}
-
 void _msg_handle(struct aeEventLoop *eventLoop, int fd, void *clientData, int mask)
 {
     (void)eventLoop;(void)clientData;
 
-    msg_t* msg = (msg_t*) _get_msg(fd);
-    if (!msg) goto end;
+    msg_t msg;
+    ssize_t n = read(fd, &msg, MSG_HEAD_LEN);
+    if (n == 0) goto end; // read EOF, close connection
+    if (n < 0 && (errno == EINTR || errno == EAGAIN))  return ;
+    if (n != MSG_HEAD_LEN) goto end;
+    
+    size_t msg_len = MSG_HEAD_LEN + msg.data_len;
+    char* buf = (char*) malloc(msg_len);
+    if (!buf) goto end;
+    memcpy (buf, &msg, MSG_HEAD_LEN);
+
+    if (read(fd, ((msg_t*)buf)->data, msg.data_len) != msg.data_len){
+        perror("read req's data failed");
+        free (buf);
+        goto end;
+    }
 
     SET_CURR_EVFD(fd);
-    custome_processing(msg);
-    free(msg);
+    custome_processing((msg_t*)buf);
+    free(buf);
+    RESET_CURR_EVFD();
 end:
     free_conn(fd, mask);
-    RESET_CURR_EVFD();
+    LOG_D("close connection[%d]", fd);
     return;
 }
 
@@ -459,11 +452,16 @@ int send_msg(void* m)
             return SM_FAILED;
         }
         else{
-            send_fd = conn_fd;
+            if (write(send_fd, m, msg_len) != msg_len)
+                return SM_FAILED;
+            aeCreateFileEvent(server.el, conn_fd, AE_READABLE, _msg_handle, NULL);
+            return SM_OK;
         }
     }
+    else{
+        if (write(send_fd, m, msg_len) != msg_len)
+            return SM_FAILED;
+    }
 
-    if (write(send_fd, m, msg_len) != msg_len)
-        return SM_FAILED;
     return SM_OK;
 }
