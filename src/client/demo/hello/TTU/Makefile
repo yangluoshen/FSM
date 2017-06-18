@@ -6,7 +6,7 @@ FLAGS+= -ladlist
 FLAGS+= -DTTU_MDL
 
 BASE_SRC= $(ROOT_DIR)/src/client/fsm.c  $(ROOT_DIR)/src/client/main.c 
-DEPS_SRC= $(ROOT_DIR)/src/fdict.c $(ROOT_DIR)/src/flist.c $(ROOT_DIR)/src/debug.c $(ROOT_DIR)/src/client/ae.c $(ROOT_DIR)/src/client/anet.c
+DEPS_SRC= $(ROOT_DIR)/src/dict.c  $(ROOT_DIR)/src/debug.c $(ROOT_DIR)/src/client/ae.c $(ROOT_DIR)/src/client/anet.c
 SRC=
 SRC+= $(BASE_SRC) $(DEPS_SRC) client_config.c $(ROOT_DIR)/src/client/demo/hello/cachefsm.c  ttu.c
 

@@ -3,7 +3,7 @@
 #include <limits.h>
 
 #include "main.h"
-#include "fdict.h"
+#include "dict.h"
 #include "debug.h"
 
 /***** fsm id management *****/
@@ -12,7 +12,9 @@
 static unsigned char fsm_id_pool[SHRT_MAX] = {0};
 static fsm_t fsm_id_ptr = MIN_COMMON_FSMID;
 
-static fdict* fsm_entity_pool = NULL;
+static dict* fsm_entity_pool = NULL;
+
+dict_option fsmid_op = {hash_calc_int, NULL, NULL, NULL, NULL,NULL};
 
 /* return: 1 means a reserved fsm id
  *         0 means a common fsm id
@@ -46,42 +48,26 @@ void free_fsm_id(fsm_t fsmid)
 
 /***********fsm entity pool ***************/
 
-int fsm_hash_match(void* entity, fdict_key_t key)
-{
-    if (!entity || !key) return 0;
-    
-    CVTTO_BASE(fsm, entity);
-    return fsm->fsmid == *(fsm_t*)key;
-}
-
-size_t fsm_hash_calc(fdict* d, fdict_key_t key)
-{
-    if (!d || !key) return -1; 
-
-    fsm_t hash = (*(fsm_t*)key) % d->hash_size;
-    return (size_t) hash;
-}
-
 void* get_fsm_entity(fsm_t fsmid)
 {
-    return fdict_find(fsm_entity_pool, &fsmid);
+    return dict_find(fsm_entity_pool, (void*)(long)fsmid);
 } 
 
 void rmv_fsm_entity(fsm_t fsmid)
 {
     LOG_D("remove fsm entity[%u]", fsmid);
-    fdict_remove(fsm_entity_pool, &fsmid);
+    dict_delete(fsm_entity_pool, (void*)(long)fsmid);
     free_fsm_id(fsmid);
 }
 
 int add_fsm_entity(fsm_t fsmid, void* entity)
 {
     if (!fsm_entity_pool){
-        fsm_entity_pool = fdict_create(FSM_HASH_NUM, fsm_hash_match, fsm_hash_calc); 
+        fsm_entity_pool = dict_create(&fsmid_op);
         if (!fsm_entity_pool) return -1;
     }
 
-    if(FDICT_SUCCESS != fdict_insert(fsm_entity_pool, &fsmid, entity))
+    if(NULL == dict_add(fsm_entity_pool, (void*)(long)fsmid, entity))
         return -1;
     
     return 0;

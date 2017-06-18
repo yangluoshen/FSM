@@ -15,7 +15,7 @@
 #include "msg.h"
 #include "fsm.h"
 #include "adlist.h"
-#include "fdict.h"
+#include "dict.h"
 #include "ae.h"
 #include "anet.h"
 
@@ -31,17 +31,18 @@
 #include "debug.h"
 const int G_LOGGER = 0;
 
-static fdict* timer_dict;
-list* g_fsm_driver;
+static dict* timer_dict;
 static int curr_ev_fd = -1;
+static inet_addr** inet_list;
+
+list* g_fsm_driver;
+dict_option timer_op = {hash_calc_int, NULL, NULL, NULL, NULL, NULL};
 
 /* client base essential */
 int __send_request(const char* name, const void* msg, size_t len);
 void custome_processing(msg_t*);
 
 /* timer declearation */
-int timer_hash_match(void* ptr, fdict_key_t key);
-size_t timer_hash_calc(fdict* d, fdict_key_t key);
 int gen_real_timer(time_t sec, int isloop);
 fsm_timer* get_timer(int fd);
 msg_t* pack_timeout_msg(fsm_timer* ft);
@@ -51,7 +52,6 @@ extern const int ME_PORT;
 extern const size_t FSM_DRIVER_SZ;
 extern const int FSM_CLIENT_EPOLL_TIMEOUT;
 
-
 #define SET_CURR_EVFD(fd) do {curr_ev_fd = (fd);}while(0)
 #define RESET_CURR_EVFD() do {curr_ev_fd = -1;}while(0)
 
@@ -60,14 +60,13 @@ struct {
     int port;
     int backlog;
     aeEventLoop* el;
-    char neterr[255];
+    char neterr[256];
 }server;
 
 
 int timer_init()
 {
-    const size_t timer_size = 256;
-    timer_dict = fdict_create(timer_size, timer_hash_match, timer_hash_calc);
+    timer_dict = dict_create(&timer_op);
     if (!timer_dict) return -1;
 
     return 0;
@@ -122,13 +121,11 @@ void _timeout_handle(struct aeEventLoop *eventLoop, int fd, void *clientData, in
     msg_t* m = pack_timeout_msg(t);
     if (!m) goto end;
 
-    SET_CURR_EVFD(fd);
     custome_processing(m);
 
     free(m);
 end:
     stop_timer(fd);
-    RESET_CURR_EVFD();
     return;
 }
 
@@ -140,7 +137,6 @@ void* _get_msg(int fd)
         LOG_ND("read req head failed");
         return NULL;
     }
-    msg.ev_fd = fd;
 
     size_t msg_len = MSG_HEAD_LEN + msg.data_len; 
     char* buf = (char*) malloc(msg_len);
@@ -201,16 +197,48 @@ int el_init()
     return 0;
 }
 
+int inet_init()
+{
+    inet_list = (inet_addr**) malloc(sizeof(inet_addr*));
+    if (!inet_list) return -1;
+    *inet_list = NULL;
+
+// the following define is for test
+#if (defined TTU_MDL || defined YAU_MDL)
+    inet_addr* net = (inet_addr*) malloc(sizeof(inet_addr)); 
+    if (!net) return -1;
+    net->mdl = TTU;
+    net->port = 5701;
+    net->ip = NULL;
+    net->next = NULL;
+
+    net->next = *inet_list;
+    *inet_list = net;
+
+    net = (inet_addr*) malloc(sizeof(inet_addr));
+    if (!net) return -1;
+    net->mdl = YAU;
+    net->port = 5702;
+    net->ip = NULL;
+    net->next = *inet_list;
+    *inet_list = net;
+
+#endif 
+    
+    return 0;
+}
+
 int initialize()
 {
     if (-1 == timer_init()) return -1;
     if (-1 == log_init()) return -1;
     if (-1 == fsm_driver_init()) return -1;
     if (-1 == el_init()) return -1;
+    if (-1 == inet_init()) return -1;
     
     if (signal(SIGINT, sig_handler) == SIG_ERR) return -1;
     if (signal(SIGQUIT, sig_handler) == SIG_ERR) return -1;
-    /*ignore SIGPIPE while there is no server reader*/
+    /*ignore SIGPIPE while there is no peer reader*/
     if (SIG_ERR == signal(SIGPIPE, SIG_IGN)) return -1;
 
 #ifdef PHI_MDL
@@ -253,20 +281,6 @@ void custome_processing(msg_t* pmsg)
 }
 
 /************** Timer ********************/
-
-int timer_hash_match(void* ptr, fdict_key_t key)
-{
-    if (!ptr || !key) return 0;
-    fsm_timer* t = (fsm_timer*) ptr;
-    return t->timerfd == *(int*)key;
-}
-
-size_t timer_hash_calc(fdict* d, fdict_key_t key)
-{
-    if (!d || !key) return -1;
-    int hash = *((int*)key) % d->hash_size;
-    return (size_t)hash;
-}
 
 int gen_real_timer(time_t sec, int isloop)
 {
@@ -323,8 +337,8 @@ int start_timer(int timerid, fsm_t fsmid, time_t seconds)
         return -1;
     }
 
-    if (FDICT_SUCCESS != fdict_insert(timer_dict, &ft->timerfd, ft)){
-        LOG_NE("fdict_insert failed");
+    if (NULL == dict_add(timer_dict, (void*)(long)ft->timerfd, ft)){
+        LOG_NE("dict_insert failed");
         close(tfd);
         free(ft);
         aeDeleteFileEvent(server.el, tfd, AE_READABLE);
@@ -338,13 +352,13 @@ int start_timer(int timerid, fsm_t fsmid, time_t seconds)
 void stop_timer(int timerfd)
 {
     LOG_ND("Enter");
-    fsm_timer* ft = (fsm_timer*) fdict_find(timer_dict, &timerfd);
+    fsm_timer* ft = (fsm_timer*) DICT_GETVAL(dict_find(timer_dict, (void*)(long)timerfd));
     if (!ft) return;
 
     aeDeleteFileEvent(server.el, timerfd, AE_READABLE);
 
     close(timerfd);
-    (void)fdict_remove(timer_dict, &timerfd);
+    (void)dict_delete(timer_dict, (void*)(long)timerfd);
 
     LOG_D("stop timer[%d]", timerfd);
     return;
@@ -352,7 +366,8 @@ void stop_timer(int timerfd)
 
 fsm_timer* get_timer(int fd)
 {
-    return (fsm_timer*) fdict_find(timer_dict, &fd);
+    dict_entry* he = dict_find(timer_dict, (void*)(long)fd);
+    return (fsm_timer*)(DICT_GETVAL(he)) ;
 }
 
 msg_t* pack_timeout_msg(fsm_timer* ft)
@@ -366,7 +381,6 @@ msg_t* pack_timeout_msg(fsm_timer* ft)
     m->r_pid = getpid();
     m->s_mdl = ME_MDL;
     m->r_mdl = ME_MDL;
-    m->ev_fd = ft->timerfd;
     m->data_len = data_len;
 
     fsm_msg_head* fh = (fsm_msg_head*) m->data;
@@ -381,13 +395,75 @@ msg_t* pack_timeout_msg(fsm_timer* ft)
     return m;
 }
 
+inet_addr* _get_inet(module_t mdl){
+    inet_addr* ia = *inet_list;
+    while(ia){
+        if (ia->mdl == mdl){
+            return ia;
+        }
+        ia = ia->next;
+    }
+
+    return NULL;
+}
+
+
+void _delaysend_handle(struct aeEventLoop *eventLoop, int fd, void *clientData, int mask)
+{
+    if (!clientData) goto end; 
+
+    msg_t* m = (msg_t*)clientData;
+    size_t msg_len = MSG_HEAD_LEN + m->data_len;
+    
+    if (msg_len != write(fd, m, msg_len)){
+        LOG_NE("send msg failed");
+    }
+
+    free (clientData);
+
+end:
+    free_conn(fd, mask);
+    return;
+}
+
 int send_msg(void* m)
 {
-    if (-1==curr_ev_fd || !m) return SM_FAILED;
+    if (!m) return SM_FAILED;
     msg_t* pmsg = (msg_t*)m;
     size_t msg_len = MSG_HEAD_LEN + pmsg->data_len;
-    if (write(curr_ev_fd, m, msg_len) != msg_len)
-        return SM_FAILED;
+    // if curr_ev_fd!=-1, means we are solving a request, so we owe a connecttion.
+    // if curr_ev_fd==-1, means we are going to send a request,so we need a new connection.
+    int send_fd = curr_ev_fd;
+    if (-1 == send_fd){
+        inet_addr* ia = _get_inet(pmsg->r_mdl);
+        if (ia == NULL){
+            LOG_E("can not connect module[%lu]", pmsg->r_mdl);
+            return SM_FAILED;
+        }
 
+        int conn_fd = anetTcpNonBlockConnect(NULL, ia ? ia->ip : "127.0.0.1", ia->port);
+        if (conn_fd == ANET_ERR && errno == EINPROGRESS){
+            LOG_ND("delay and send");
+            void* client_data = malloc(msg_len); //client_data will be freed in the callback func
+            if (!client_data) {
+                close(conn_fd);
+                return SM_FAILED;
+            }
+            memcpy(client_data, m, msg_len);
+            aeCreateFileEvent(server.el, conn_fd, AE_WRITABLE, _delaysend_handle, client_data);
+            return SM_OK;
+        }
+        else if (conn_fd == ANET_ERR){
+            perror("connect");
+            LOG_NE("connect failed");
+            return SM_FAILED;
+        }
+        else{
+            send_fd = conn_fd;
+        }
+    }
+
+    if (write(send_fd, m, msg_len) != msg_len)
+        return SM_FAILED;
     return SM_OK;
 }

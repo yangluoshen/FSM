@@ -8,14 +8,13 @@ typedef void* data_t;
 typedef size_t msg_type_t;
 typedef ssize_t error_t;
 typedef size_t module_t;
-typedef unsigned short fsm_t;
+typedef unsigned int fsm_t;
 
 #define MSG_HEAD \
     pid_t s_pid;     /*sender pid*/\
     pid_t r_pid;     /*receiver pid*/\
     module_t s_mdl;  /*sender module type*/\
     module_t r_mdl;  /*receiver module type*/\
-    int ev_fd;\
     size_t data_len;
 
 /* msg head */
@@ -42,6 +41,13 @@ typedef struct {
     fsm_t fsmid;
 
 }fsm_timer;
+
+typedef struct inet_addr{
+    module_t mdl;
+    int port;
+    char* ip;
+    struct inet_addr* next;
+}inet_addr;
 
 enum TIMERTYPE{
     NO_LOOP = 0,
