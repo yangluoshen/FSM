@@ -24,7 +24,11 @@ const size_t FSM_DRIVER_SZ = sizeof(g_msg_driver)/sizeof(msg_driver_node);
 fsm_reg g_fsm_reg_table[] = 
 {
     {CACHE_REQ, cache_fsm_constructor, cache_fsm_create}
+};
 
+ev_driver_node cli_ev_list[] = 
+{
+    {0, 0, NULL}
 };
 /*FSM_EPOLL_BLOCK by default */
 const int FSM_CLIENT_EPOLL_TIMEOUT = FSM_EPOLL_BLOCK;
@@ -53,3 +57,18 @@ fsm_reg* get_reginfo_by_msgtype(int type)
     } 
     return NULL;
 }
+
+size_t get_cli_ev_size(void)
+{
+    return sizeof (cli_ev_list) /sizeof(cli_ev_list[0]);
+}
+
+ev_driver_node* get_cli_ev(size_t i)
+{
+    size_t n = sizeof (cli_ev_list) /sizeof(cli_ev_list[0]);
+    if (i < n)
+        return &cli_ev_list[i];
+
+    return NULL;
+}
+

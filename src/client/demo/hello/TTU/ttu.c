@@ -18,9 +18,9 @@ void process_yau_req(void* data)
         case CACHE_REQ: 
             proc_fsm_req(pmsg);
             break;
-        case CACHE_QUERY_REQ:
-            proc_fsm_resp(pmsg);
-            break;
+        //case CACHE_QUERY_REQ:
+        //    proc_fsm_resp(pmsg);
+        //    break;
         default:
             LOG_D("unknown msg type[%d]", fsm_head->msgtype);
             break;
