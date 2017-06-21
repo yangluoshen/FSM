@@ -16,5 +16,7 @@ enum ENUM_FSM_EPPOL_TIMEOUT{
 size_t get_driver_size(void);
 const msg_driver_node* get_driver_node(size_t index);
 fsm_reg* get_reginfo_by_msgtype(int type);
+size_t get_cli_ev_size(void);
+ev_driver_node* get_cli_ev(size_t i);
 
 #endif /*__CLIENT_CONFIG_H */

@@ -66,7 +66,8 @@ int cache_fsm_req(void* entity, void* msg)
     chat_yau_resp((cache_fsm*)entity, fsm_head->fsmid, data->s_pid, data->s_mdl);
     
     CVTTO_CACHE(cache_en, entity);
-    cache_en->nextjump = cache_fsm_query;
+    cache_en->nextjump = NULL;
+    fsm_set_fsm_finish(entity);
     return FSM_OK;
 }
 

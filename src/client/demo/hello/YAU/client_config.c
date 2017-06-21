@@ -1,11 +1,14 @@
 #include "client_config.h"
 #include "main.h"
+#include <unistd.h>
 
 const module_t ME_MDL = YAU;  /* the module type you want */
 const int ME_PORT = 5702;
 
 
 void process_ttu_req(void* pmsg);
+void stdin_handle(struct aeEventLoop *eventLoop, int fd, void *clientData, int mask);
+
 msg_driver_node g_msg_driver[] = 
 {
     {TTU, process_ttu_req}
@@ -19,6 +22,12 @@ fsm_reg g_fsm_reg_table[] =
     {0, NULL, NULL}
 
 };
+
+ev_driver_node cli_ev_list[] = 
+{
+    {STDIN_FILENO, AE_READABLE, stdin_handle}
+};
+
 /*FSM_EPOLL_BLOCK by default */
 const int FSM_CLIENT_EPOLL_TIMEOUT = FSM_EPOLL_WAIT_SECONDS;
 
@@ -35,6 +44,7 @@ const msg_driver_node* get_driver_node(size_t index)
     return NULL;
 }
 
+// 根据对端消息类型获取注册表中对应的自动机生成器
 fsm_reg* get_reginfo_by_msgtype(int type)
 {
     int i;
@@ -46,4 +56,17 @@ fsm_reg* get_reginfo_by_msgtype(int type)
     return NULL;
 }
 
+size_t get_cli_ev_size(void)
+{
+    return sizeof (cli_ev_list) /sizeof(cli_ev_list[0]);
+}
+
+ev_driver_node* get_cli_ev(size_t i)
+{
+    size_t n = sizeof (cli_ev_list) /sizeof(cli_ev_list[0]);
+    if (i < n)
+        return &cli_ev_list[i];
+
+    return NULL;
+}
 

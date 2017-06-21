@@ -3,6 +3,7 @@
 
 #include <stdio.h>
 #include <sys/types.h>
+#include "ae.h"
 
 typedef void* data_t;
 typedef size_t msg_type_t;
@@ -45,9 +46,18 @@ typedef struct {
 typedef struct inet_addr{
     module_t mdl;
     int port;
-    char* ip;
+    union {
+        char* ip;   //ipv4, ipv6
+        char* path; //unix domain
+    }addr;
     struct inet_addr* next;
 }inet_addr;
+
+typedef struct ev_driver_node{
+    int fd;
+    int mask;
+    aeFileProc* proc;
+}ev_driver_node;
 
 enum TIMERTYPE{
     NO_LOOP = 0,
@@ -74,6 +84,7 @@ void stop_timer(int timerfd);
 int send_msg(void* m);
 
 #define TIMEOUT_MSG (9999)
+#define FSM_UNIX_DOMAIN_PATH "/fsmunixsock"
 
 #define GET_TIMERFD(msg) \
     (((fsm_timer*)(((fsm_msg_head*)(((msg_t*)(msg))->data))->data))->timerfd);

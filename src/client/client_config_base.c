@@ -18,6 +18,11 @@ fsm_reg g_fsm_reg_table[] =
 
 };
 
+ev_driver_node cli_ev_list[] = 
+{
+    {NULL, 0}
+};
+
 /*FSM_EPOLL_BLOCK by default */
 const int FSM_CLIENT_EPOLL_TIMEOUT = FSM_EPOLL_BLOCK;
 
@@ -45,4 +50,17 @@ fsm_reg* get_reginfo_by_msgtype(msg_t type)
     return NULL;
 }
 
+size_t get_cli_ev_size(void)
+{
+    return sizeof (cli_ev_list) /sizeof(cli_ev_list[0]);
+}
+
+ev_driver_node* get_cli_ev(size_t i)
+{
+    size_t n = sizeof (cli_ev_list) /sizeof(cli_ev_list[0]);
+    if (i < n)
+        return &cli_ev_list[i];
+
+    return NULL;
+}
 

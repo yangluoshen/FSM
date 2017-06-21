@@ -18,7 +18,7 @@
 #include "dict.h"
 #include "ae.h"
 #include "anet.h"
-
+#include "client_config.h"
 #include "main.h"
 
 #ifdef PHI_MDL
@@ -112,6 +112,18 @@ void free_conn(int fd, int mask)
     close(fd);
 }
 
+inet_addr* _get_addr(module_t mdl){
+    inet_addr* ia = *inet_list;
+    while(ia){
+        if (ia->mdl == mdl){
+            return ia;
+        }
+        ia = ia->next;
+    }
+
+    return NULL;
+}
+
 void _timeout_handle(struct aeEventLoop *eventLoop, int fd, void *clientData, int mask)
 {
     (void)eventLoop;(void)clientData;(void)mask;
@@ -141,6 +153,7 @@ void _msg_handle(struct aeEventLoop *eventLoop, int fd, void *clientData, int ma
     if (n != MSG_HEAD_LEN) goto end;
     
     size_t msg_len = MSG_HEAD_LEN + msg.data_len;
+    printf("recv msg:len= %lu + %lu\n", MSG_HEAD_LEN, msg.data_len);
     char* buf = (char*) malloc(msg_len);
     if (!buf) goto end;
     memcpy (buf, &msg, MSG_HEAD_LEN);
@@ -164,7 +177,7 @@ end:
 void _accept_handle(struct aeEventLoop *eventLoop, int fd, void *clientData, int mask)
 {
     (void)eventLoop;(void)clientData;(void)mask;
-    int conn_fd = anetTcpAccept(server.neterr, fd, NULL, 0, NULL); 
+    int conn_fd = anetUnixAccept(server.neterr, fd); 
     if (ANET_ERR == conn_fd) return;
 
     anetNonBlock(NULL, conn_fd);
@@ -177,9 +190,11 @@ void _accept_handle(struct aeEventLoop *eventLoop, int fd, void *clientData, int
 int el_init()
 {
     server.el = aeCreateEventLoop(MAX_EV_NUM);
-    server.port = ME_PORT;
     server.backlog = 100;
-    server.sv_fd = anetTcpServer(server.neterr, server.port, NULL, server.backlog);
+    inet_addr* ia = _get_addr(ME_MDL);
+    if (!ia) return -1;
+    unlink(ia->addr.path);
+    server.sv_fd = anetUnixServer(server.neterr, ia->addr.path, 0775, server.backlog);
     if (ANET_ERR == server.sv_fd) return -1;
     
     anetNonBlock(NULL, server.sv_fd);
@@ -202,7 +217,7 @@ int inet_init()
     if (!net) return -1;
     net->mdl = TTU;
     net->port = 5701;
-    net->ip = NULL;
+    net->addr.path = "/fsmunixsockttu";
     net->next = NULL;
 
     net->next = *inet_list;
@@ -212,7 +227,7 @@ int inet_init()
     if (!net) return -1;
     net->mdl = YAU;
     net->port = 5702;
-    net->ip = NULL;
+    net->addr.path = "/fsmunixsockyau";
     net->next = *inet_list;
     *inet_list = net;
 
@@ -221,13 +236,26 @@ int inet_init()
     return 0;
 }
 
+void init_cli_events()
+{
+    size_t i;
+    size_t ev_num = get_cli_ev_size();
+    for (i=0; i<ev_num; ++i){
+        ev_driver_node* ev = get_cli_ev(i);
+        if (ev){
+            aeCreateFileEvent(server.el, ev->fd, ev->mask, ev->proc, NULL);
+        }
+    }
+}
+
 int initialize()
 {
     if (-1 == timer_init()) return -1;
     if (-1 == log_init()) return -1;
     if (-1 == fsm_driver_init()) return -1;
-    if (-1 == el_init()) return -1;
     if (-1 == inet_init()) return -1;
+    if (-1 == el_init()) return -1;
+    init_cli_events();
     
     if (signal(SIGINT, sig_handler) == SIG_ERR) return -1;
     if (signal(SIGQUIT, sig_handler) == SIG_ERR) return -1;
@@ -388,17 +416,6 @@ msg_t* pack_timeout_msg(fsm_timer* ft)
     return m;
 }
 
-inet_addr* _get_inet(module_t mdl){
-    inet_addr* ia = *inet_list;
-    while(ia){
-        if (ia->mdl == mdl){
-            return ia;
-        }
-        ia = ia->next;
-    }
-
-    return NULL;
-}
 
 
 void _delaysend_handle(struct aeEventLoop *eventLoop, int fd, void *clientData, int mask)
@@ -424,17 +441,20 @@ int send_msg(void* m)
     if (!m) return SM_FAILED;
     msg_t* pmsg = (msg_t*)m;
     size_t msg_len = MSG_HEAD_LEN + pmsg->data_len;
+    printf("send msg:len= %lu + %lu\n", MSG_HEAD_LEN, pmsg->data_len);
     // if curr_ev_fd!=-1, means we are solving a request, so we owe a connecttion.
     // if curr_ev_fd==-1, means we are going to send a request,so we need a new connection.
     int send_fd = curr_ev_fd;
     if (-1 == send_fd){
-        inet_addr* ia = _get_inet(pmsg->r_mdl);
-        if (ia == NULL){
+        inet_addr* ia = _get_addr(pmsg->r_mdl);
+        if (!ia){
             LOG_E("can not connect module[%lu]", pmsg->r_mdl);
             return SM_FAILED;
         }
 
-        int conn_fd = anetTcpNonBlockConnect(NULL, ia ? ia->ip : "127.0.0.1", ia->port);
+        char err[256] = {0};
+        int conn_fd = anetUnixConnect(err, ia->addr.path);
+        printf("err:%s\n", err);
         if (conn_fd == ANET_ERR && errno == EINPROGRESS){
             LOG_ND("delay and send");
             void* client_data = malloc(msg_len); //client_data will be freed in the callback func
@@ -452,8 +472,9 @@ int send_msg(void* m)
             return SM_FAILED;
         }
         else{
-            if (write(send_fd, m, msg_len) != msg_len)
+            if (write(conn_fd, m, msg_len) != msg_len){
                 return SM_FAILED;
+            }
             aeCreateFileEvent(server.el, conn_fd, AE_READABLE, _msg_handle, NULL);
             return SM_OK;
         }

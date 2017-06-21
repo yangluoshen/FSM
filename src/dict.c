@@ -88,7 +88,12 @@ int  _dict_init(dict* d, const dict_option* op, uint32_t hashsize)
     d->ht[d->serve].size = hashsize;
     d->ht[d->serve].used = 0;
     // valgrind would compain  "uninitialised value"
-    memset(serve_table(d), 0, sizeof(hashsize * sizeof(dict_entry*)));
+    //memset(serve_table(d), 0, sizeof(hashsize * sizeof(dict_entry*)));
+
+    int i;
+    for (i = 0; i < hashsize; ++i){
+        serve_table(d)[i] = NULL;
+    }
 
     d->ht[!d->serve].table = NULL;
     
@@ -199,9 +204,12 @@ void _rehash(dict* d)
     d->ht[!d->serve].size = new_size;
     d->ht[!d->serve].used = 0;
     // valgrind would compain  "uninitialised value"
-    memset(idle_table(d), 0, sizeof(new_size * sizeof(dict_entry*)));
-
+    //memset(idle_table(d), 0, sizeof(new_size * sizeof(dict_entry*)));
     uint32_t i;
+    for (i=0; i < new_size; ++i){
+        idle_table(d)[i] = NULL;
+    }
+
     for (i=0; i < _hash_size(d); ++i){
         dict_entry* he = serve_table(d)[i];
         while (he){
